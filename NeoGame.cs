@@ -1,3 +1,4 @@
+using NeoGameLib.NeoCollision;
 using NeoGameLib.NeoGO;
 using NeoGameLib.NeoRendering;
 using Microsoft.Xna.Framework;
@@ -6,22 +7,25 @@ using Microsoft.Xna.Framework.Graphics;
 namespace NeoGameLib;
 
 // note to future self:
-// library front door. inherit this instead of Game; game logic goes in the On* hooks.
-// components reach managers via NeoGame.Singleton (e.g. NeoGame.Singleton.RenderBus),
-// and their world via ParentObject.World.
-// adding a future manager (e.g. NeoColliderBus): create it in Initialize, update it in
-// Update, expose a property — components pick it up through Singleton. that's the whole contract.
+// to setup: inherit this instead of the `Game` class; this `NeoGame` class automatically sets up the Singleton, update and initialize hooks, and creates the managers.
+// 
+// steps for adding a future manager (e.g. NeoAudioBus or smth):
+// 1. create it in Initialize()
+// 2. update it in Update()
+//
+// TODO: Need NeoAudioBus/NeoAnimationBus in the future
 public class NeoGame : Game
 {
     private GraphicsDeviceManager _gdm;
     private SpriteBatch _spriteBatch;
     private NeoRenderBus _renderBus;
+    private NeoColliderBus _colliderBus;
 
     public static NeoGame? Singleton { get; private set; }
 
     public GraphicsDeviceManager GraphicsDeviceManager => _gdm;
     public NeoRenderBus RenderBus => _renderBus;
-    public NeoWorld? World { get; private set; }
+    public NeoColliderBus ColliderBus => _colliderBus;
 
     public NeoGame()
     {
@@ -36,6 +40,7 @@ public class NeoGame : Game
     {
         base.Initialize();
         _renderBus = new NeoRenderBus(_gdm);
+        _colliderBus = new NeoColliderBus();
         OnInitialize();
     }
 
@@ -50,7 +55,7 @@ public class NeoGame : Game
     {
         base.Update(gameTime);
         OnUpdate(gameTime);
-        World?.Update(gameTime);
+        ColliderBus.Update();
     }
 
     protected sealed override void Draw(GameTime gameTime)
@@ -59,12 +64,6 @@ public class NeoGame : Game
         RenderBus.Draw(_spriteBatch);
         OnDraw(_spriteBatch, gameTime);
         base.Draw(gameTime);
-    }
-
-    public NeoWorld CreateWorld(string name)
-    {
-        World = new NeoWorld(name);
-        return World;
     }
 
     public Vector2 GetScreenCenterCoords()

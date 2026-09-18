@@ -4,8 +4,6 @@ using Microsoft.Xna.Framework.Input;
 
 namespace NeoGameLib;
 
-// note to future self: this is what a consumer project's Game1 looks like now.
-// no GraphicsDeviceManager, no SpriteBatch, no wiring — NeoGame owns all of it.
 public class Game1 : NeoGame
 {
     protected override void OnInitialize()
@@ -15,8 +13,6 @@ public class Game1 : NeoGame
 
     protected override void OnLoadContent()
     {
-        CreateWorld("level1");
-
         // TODO: use this.Content to load your game content here
     }
 
