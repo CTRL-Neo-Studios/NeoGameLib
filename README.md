@@ -17,3 +17,11 @@ dotnet add package NeoGameLib
 ```
 
 WARNING: install after you initialized the project with monogame
+
+## Update
+
+```bash
+dotnet add package NeoGameLib
+```
+
+same command pulls the latest version, the package reference in your csproj gets overwritten wiht the newer version number
