@@ -59,8 +59,9 @@ public class NeoRenderBus
             if (sp.Texture is null || !sp.Enabled) continue;
 
             Transform transform = sp.ParentTransform;
-            Vector2 origin = sp.Texture.Bounds.Size.ToVector2() * sp.Anchor;
-            spriteBatch.Draw(sp.Texture, transform.Position, null, sp.Color, transform.Rotation, origin, transform.Scale, placeholderEffect, sp.Depth);
+            Vector2 frameSize = (sp.SourceRectangle?.Size ?? sp.Texture.Bounds.Size).ToVector2(); // if source rect is present then use source rect for frame size instead of the sprite texture, because source rect is not null when sprite is animated
+            Vector2 origin = frameSize * sp.Anchor;
+            spriteBatch.Draw(sp.Texture, transform.Position, sp.SourceRectangle, sp.Color, transform.Rotation, origin, transform.Scale, placeholderEffect, sp.Depth);
         }
     }
 }

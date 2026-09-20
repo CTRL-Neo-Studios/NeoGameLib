@@ -61,8 +61,12 @@ public class NeoGame : Game
     protected sealed override void Draw(GameTime gameTime)
     {
         GraphicsDevice.Clear(Color.CornflowerBlue);
+
+        _spriteBatch.Begin();
         RenderBus.Draw(_spriteBatch);
         OnDraw(_spriteBatch, gameTime);
+        _spriteBatch.End();
+
         base.Draw(gameTime);
     }
 
