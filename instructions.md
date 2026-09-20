@@ -82,3 +82,16 @@ public class HurtBox : NeoBoxCollider
     }
 }
 ```
+
+for timers: reusable individual countdown timers without the need to attach to specific objects. but it's ideally used in a component or an object.
+
+```csharp
+NeoTimer invuln = new(0.5f); // seconds
+invuln.OnFinished = () => { /* finish func here */ };
+invuln.Start(); // Start while running restarts from full
+
+// a sisyphus timer
+spawnTimer.OnFinished = () => spawnTimer.Start();
+
+// Stop kills it (fires OnStop), Pause/Resume freeze the countdown (fire OnPause/OnResume), OnStart fires on every Start, TimeLeft is the remaining seconds
+```

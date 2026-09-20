@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using NeoGameLib.Common;
 using Microsoft.Xna.Framework;
 
 namespace NeoGameLib.NeoCollision;
@@ -16,44 +17,32 @@ namespace NeoGameLib.NeoCollision;
 //
 // also this bus is world-agnostic, colliders from different worlds WILL collide with each other.
 // YOU HAVE BEEN WARNED
-public class NeoColliderBus
+public class NeoColliderBus : NeoBus<NeoBoxCollider>
 {
-    private List<NeoBoxCollider> _colliders = new();
     private List<NeoCollision> _collisions = new();
     private Rectangle[] _bounds = new Rectangle[0];
 
     public List<NeoCollision> Collisions => _collisions;
 
-    public void AddCollider(NeoBoxCollider collider)
-    {
-        if (_colliders.Contains(collider)) return;
-        _colliders.Add(collider);
-    }
-
-    public void RemoveCollider(NeoBoxCollider collider)
-    {
-        _colliders.Remove(collider);
-    }
-
     public List<NeoCollision> Update()
     {
         _collisions.Clear();
 
-        if (_bounds.Length < _colliders.Count)
-            _bounds = new Rectangle[_colliders.Count];
+        if (_bounds.Length < Items.Count)
+            _bounds = new Rectangle[Items.Count];
 
         // cache the bounds once per frame, skipping disabled colliders which intersects with nothing because they return an empty rectangle bound
-        for (int i = 0; i < _colliders.Count; i++)
-            _bounds[i] = _colliders[i].Enabled ? _colliders[i].Bounds : Rectangle.Empty;
+        for (int i = 0; i < Items.Count; i++)
+            _bounds[i] = Items[i].Enabled ? Items[i].Bounds : Rectangle.Empty;
 
-        for (int i = 0; i < _colliders.Count; i++)
+        for (int i = 0; i < Items.Count; i++)
         {
-            for (int j = i + 1; j < _colliders.Count; j++)
+            for (int j = i + 1; j < Items.Count; j++)
             {
                 if (!_bounds[i].Intersects(_bounds[j])) continue;
 
-                NeoBoxCollider a = _colliders[i];
-                NeoBoxCollider b = _colliders[j];
+                NeoBoxCollider a = Items[i];
+                NeoBoxCollider b = Items[j];
                 NeoCollision col = new(a, b, Rectangle.Intersect(_bounds[i], _bounds[j]));
                 _collisions.Add(col);
                 a.OnCollision(col);
