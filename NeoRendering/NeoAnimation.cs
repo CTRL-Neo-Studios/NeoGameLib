@@ -12,12 +12,15 @@ public class NeoAnimation
     public List<Rectangle> Frames { get; }
     public float FrameDuration { get; } // seconds per frame
     public bool Loop { get; }
+    public bool HoldLastFrame { get; }
 
-    public NeoAnimation(List<Rectangle> frames, float frameDuration, bool loop = true)
+    // holdLastFrame: when a non-looping animation ends, keep showing the last frame
+    public NeoAnimation(List<Rectangle> frames, float frameDuration, bool loop = true, bool holdLastFrame = true)
     {
         Frames = frames;
         FrameDuration = frameDuration;
         Loop = loop;
+        HoldLastFrame = holdLastFrame;
     }
 
     // note to self:
@@ -29,7 +32,7 @@ public class NeoAnimation
     // horizontalFirst = walk rows before columns (the normal way), false = walk down each column first (the fucking deranged way but just in case if sb is deranged like this hey you can use it)
     public static NeoAnimation FromGrid(Point gridSize, Point cellSize, float frameDuration, bool loop = true,
         Direction2D horizontal = Direction2D.Right, Direction2D vertical = Direction2D.Down,
-        Point padding = default, Point margin = default, bool horizontalFirst = true)
+        Point padding = default, Point margin = default, bool horizontalFirst = true, bool holdLastFrame = true)
     {
         List<Rectangle> frames = new();
 
@@ -54,6 +57,6 @@ public class NeoAnimation
                     AddFrame(col, row);
         }
 
-        return new NeoAnimation(frames, frameDuration, loop);
+        return new NeoAnimation(frames, frameDuration, loop, holdLastFrame);
     }
 }
