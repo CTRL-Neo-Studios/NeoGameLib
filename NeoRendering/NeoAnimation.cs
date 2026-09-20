@@ -33,8 +33,7 @@ public class NeoAnimation
     {
         List<Rectangle> frames = new();
 
-        // one shared frame-adder so the two walk orders can't drift apart, they only
-        // differ in which axis is the outer loop
+        // one shared frame-adder so the two walk orders can't drift apart and that they only differ in which axis is the outer loop
         void AddFrame(int col, int row)
         {
             int x = (horizontal == Direction2D.Right ? col : gridSize.X - 1 - col) * (cellSize.X + padding.X) + margin.X;
