@@ -1,3 +1,4 @@
+using NeoGameLib.Common;
 using NeoGameLib.NeoCollision;
 using NeoGameLib.NeoGO;
 using NeoGameLib.NeoRendering;
@@ -20,12 +21,14 @@ public class NeoGame : Game
     private SpriteBatch _spriteBatch;
     private NeoRenderBus _renderBus;
     private NeoColliderBus _colliderBus;
+    private NeoTimerBus _timerBus;
 
     public static NeoGame? Singleton { get; private set; }
 
     public GraphicsDeviceManager GraphicsDeviceManager => _gdm;
     public NeoRenderBus RenderBus => _renderBus;
     public NeoColliderBus ColliderBus => _colliderBus;
+    public NeoTimerBus TimerBus => _timerBus;
 
     public NeoGame()
     {
@@ -41,6 +44,7 @@ public class NeoGame : Game
         base.Initialize();
         _renderBus = new NeoRenderBus(_gdm);
         _colliderBus = new NeoColliderBus();
+        _timerBus = new NeoTimerBus();
         OnInitialize();
     }
 
@@ -56,6 +60,7 @@ public class NeoGame : Game
         base.Update(gameTime);
         OnUpdate(gameTime);
         ColliderBus.Update();
+        TimerBus.Update(gameTime);
     }
 
     protected sealed override void Draw(GameTime gameTime)

@@ -39,11 +39,11 @@ public class NeoBoxCollider : NeoComponent
 
     public override void OnAwake()
     {
-        NeoGame.Singleton?.ColliderBus.AddCollider(this);
+        NeoGame.Singleton?.ColliderBus.Add(this);
     }
 
     public override void OnDestroy()
     {
-        NeoGame.Singleton?.ColliderBus.RemoveCollider(this);
+        NeoGame.Singleton?.ColliderBus.Remove(this);
     }
 }
