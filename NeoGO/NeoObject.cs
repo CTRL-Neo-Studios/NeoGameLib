@@ -120,9 +120,12 @@ public class NeoObject
     public void Tick(GameTime gameTime)
     {
         if (IsDestroyed) return; // If tick is somehow ran after it's destroyed via world queue, this prevents logic in tick from running after destroy
-        
-        foreach (NeoComponent component in _components)
+
+        // note to future self:
+        // index-based loop ON PURPOSE to prevent "Collection was modified" exception thrown IF an object adds another component during runtime
+        for (int i = 0; i < _components.Count; i++)
         {
+            NeoComponent component = _components[i];
             if (!component.Enabled) continue;
 
             if (!component.HasRanOnStart)
@@ -141,11 +144,14 @@ public class NeoObject
         if (IsDestroyed) return;
 
         IsDestroyed = true;
-        foreach (var component in _components)
+
+        // backwards index loop, same reason as Tick: OnDestroy is user code and might
+        // mutate the list it's running on
+        for (int i = _components.Count - 1; i >= 0; i--)
         {
-            component.OnDestroy();
+            _components[i].OnDestroy();
         }
-        
+
         _components.Clear();
     }
     #endregion
