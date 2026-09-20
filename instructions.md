@@ -24,6 +24,17 @@ protected override void OnLoadContent()
 }
 ```
 
+instead of listing bounds one by one, walk a grid:
+
+```csharp
+// 6x4 cells of 32x32, read left-to-right top-to-bottom
+NeoAnimation run = NeoAnimation.FromGrid(new Point(6, 4), new Point(32, 32), 0.1f);
+// horizontal/vertical args flip the walk direction (Left = mirrored, Up = from the bottom)
+// padding = gap between cells, margin = sheet top-left offset, both in px:
+NeoAnimation padded = NeoAnimation.FromGrid(new Point(6, 4), new Point(32, 32), 0.1f, padding: new Point(2), margin: new Point(4));
+// horizontalFirst: false walks down each column first instead of across each row
+```
+
 for text: add a SpriteFont asset in the mgcb editor, then smth like this
 
 ```csharp [AlsoInsideAClassInheritingNeoGameClass.cs]
