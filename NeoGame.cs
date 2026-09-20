@@ -3,6 +3,7 @@ using NeoGameLib.NeoCollision;
 using NeoGameLib.NeoGO;
 using NeoGameLib.NeoRendering;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 
 namespace NeoGameLib;
@@ -52,7 +53,7 @@ public class NeoGame : Game
     {
         base.LoadContent();
         _spriteBatch = new SpriteBatch(GraphicsDevice);
-        OnLoadContent();
+        OnLoadContent(Content);
     }
 
     protected sealed override void Update(GameTime gameTime)
@@ -81,7 +82,7 @@ public class NeoGame : Game
     }
 
     protected virtual void OnInitialize() { }
-    protected virtual void OnLoadContent() { }
+    protected virtual void OnLoadContent(ContentManager CM) { }
     protected virtual void OnUpdate(GameTime gameTime) { }
     protected virtual void OnDraw(SpriteBatch spriteBatch, GameTime gameTime) { }
 }
