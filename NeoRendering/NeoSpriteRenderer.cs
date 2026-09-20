@@ -20,6 +20,11 @@ public class NeoSpriteRenderer : NeoComponent
         set => _texture = value;
     }
 
+    // note to self:
+    // this is the variable the animator sets to animate frames on a spritesheet. both the bounds and render bus origin follows this variable now so that the collider and anchor wouldn't be affected while the sprite was animated
+    // also keep in mind, null = whole texture
+    public Rectangle? SourceRectangle { get; set; }
+
     public Color Color
     {
         get => _color;
@@ -54,9 +59,12 @@ public class NeoSpriteRenderer : NeoComponent
         {
             if (_texture is null) return Rectangle.Empty;
 
-            Vector2 origin = _texture.Bounds.Size.ToVector2() * _anchor;
+            // bounds follow the current frame (source rect) so a collider doesn't grow
+            // to the whole sprite sheet while animating
+            Vector2 frameSize = (SourceRectangle?.Size ?? _texture.Bounds.Size).ToVector2();
+            Vector2 origin = frameSize * _anchor;
             Vector2 topLeft = ParentTransform.Position - origin * ParentTransform.Scale;
-            Vector2 size = _texture.Bounds.Size.ToVector2() * ParentTransform.Scale;
+            Vector2 size = frameSize * ParentTransform.Scale;
             return new Rectangle((int)topLeft.X, (int)topLeft.Y, (int)size.X, (int)size.Y);
         }
     }

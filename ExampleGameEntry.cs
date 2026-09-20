@@ -4,7 +4,7 @@ using Microsoft.Xna.Framework.Input;
 
 namespace NeoGameLib;
 
-internal class Game1 : NeoGame
+internal class ExampleGameEntry : NeoGame
 {
     protected override void OnInitialize()
     {
