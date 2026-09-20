@@ -42,10 +42,13 @@ public class NeoGame : Game
 
     protected sealed override void Initialize()
     {
-        base.Initialize();
+        // note to self:
+        // monoGame runs LoadContent() from the TAIL of base.Initialize(), not after it, so the buses MUST be created before base.Initialize() or every OnLoadContent that adds a renderer/collider/timer NREs on a null bus. it's also why OnLoadContent fires before OnInitialize since LoadContent happens inside base.Initialize()
         _renderBus = new NeoRenderBus(_gdm);
         _colliderBus = new NeoColliderBus();
         _timerBus = new NeoTimerBus();
+
+        base.Initialize();
         OnInitialize();
     }
 

@@ -1,7 +1,7 @@
 for animation: Make a spritesheet and import it, and then do smth like this
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
-protected override void OnLoadContent()
+protected override void OnLoadContent(ContentManager CM)
 {
     CreateWorld("level1");
 
@@ -38,7 +38,7 @@ NeoAnimation padded = NeoAnimation.FromGrid(new Point(6, 4), new Point(32, 32), 
 for text: add a SpriteFont asset in the mgcb editor, then smth like this
 
 ```csharp [AlsoInsideAClassInheritingNeoGameClass.cs]
-protected override void OnLoadContent()
+protected override void OnLoadContent(ContentManager CM)
 {
     SpriteFont font = Content.Load<SpriteFont>("fonts/ui");
 
@@ -55,7 +55,7 @@ texts draw after sprites
 for colliders: two flavors, both register themselves on awake, collisions are computed automatically every frame after the world update
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
-protected override void OnLoadContent()
+protected override void OnLoadContent(ContentManager CM)
 {
     // the sprite collider's bounds automatically resizes to the sprite on the SAME object. bounds resize for animation frames as well
     NeoObject player = World.Instantiate("Player");
