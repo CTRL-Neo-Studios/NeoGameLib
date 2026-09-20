@@ -65,16 +65,34 @@ public class NeoAnimator : NeoComponent
 
         if (CurrentFrameIndex >= _animation.Frames.Count)
         {
-            if (_animation.Loop) CurrentFrameIndex = 0;
+            if (_animation.Loop)
+            {
+                CurrentFrameIndex = 0;
+            }
             else
             {
-                // clamp to the last frame instead of setting to a null frame
-                CurrentFrameIndex = _animation.Frames.Count - 1;
+                // apply the end visual FIRST and fire the callback LAST so a callback
+                // that switches animations via Play() always wins over this branch
+                if (_animation.HoldLastFrame)
+                {
+                    // stay on the last frame so the sprite keeps showing
+                    CurrentFrameIndex = _animation.Frames.Count - 1;
+                    ApplyFrame();
+                }
+                else if (_renderer is not null)
+                {
+                    // vanish instead: an empty source rect draws nothing and also
+                    // zeroes the renderer bounds so sprite colliders die with the sprite
+                    _renderer.SourceRectangle = Rectangle.Empty;
+                }
+
                 if (!_finishedFired)
                 {
                     _finishedFired = true;
                     OnAnimationFinished?.Invoke();
                 }
+
+                return;
             }
         }
 
