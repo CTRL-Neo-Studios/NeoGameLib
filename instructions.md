@@ -32,7 +32,7 @@ NeoAnimation run = NeoAnimation.FromGrid(new Point(6, 4), new Point(32, 32), 0.1
 // horizontal/vertical args flip the walk direction (Left = mirrored, Up = from the bottom)
 // padding = gap between cells, margin = sheet top-left offset, both in px:
 NeoAnimation padded = NeoAnimation.FromGrid(new Point(6, 4), new Point(32, 32), 0.1f, padding: new Point(2), margin: new Point(4));
-// horizontalFirst: false walks down each column first instead of across each row
+// horizontalFirst: setting to false walks down each column first instead of across each row
 ```
 
 for text: add a SpriteFont asset in the mgcb editor, then smth like this
