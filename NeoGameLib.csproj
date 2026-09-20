@@ -3,7 +3,7 @@
     <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     
     <PackageId>NeoGameLib</PackageId>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <Authors>Type-32</Authors>
     <Company>CTRL Neo Studios</Company>
     <Description>NeoGameLib: prefab framework for monogame that packs a lot of punch, with simple collision bus, render bus, etc.</Description>
@@ -14,7 +14,6 @@
     <RepositoryType>git</RepositoryType>
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- 1591: no XML docs on public members yet, 8632: nullable annotations without NRT enabled -->
     <NoWarn>$(NoWarn);CS1591;CS8632</NoWarn>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>

@@ -1,4 +1,4 @@
-Make a spritesheet and import it, and then do smth like this
+for animation: Make a spritesheet and import it, and then do smth like this
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
 protected override void OnLoadContent()
@@ -23,3 +23,20 @@ protected override void OnLoadContent()
     animator.Play(/* attack animation or smth*/);
 }
 ```
+
+for text: add a SpriteFont asset in the mgcb editor, then smth like this
+
+```csharp [AlsoInsideAClassInheritingNeoGameClass.cs]
+protected override void OnLoadContent()
+{
+    SpriteFont font = Content.Load<SpriteFont>("fonts/ui");
+
+    NeoObject label = World.Instantiate("ScoreLabel");
+    NeoTextRenderer text = label.AddComponent(new NeoTextRenderer(RenderBus, font));
+    text.Text = "Score: 0";
+    text.Anchor = Vector2.Zero; // (0,0) = top-left of the text, default (0.5,0.5) centers it
+    label.Transform.Position = new Vector2(20, 20);
+}
+```
+
+texts draw after sprites
