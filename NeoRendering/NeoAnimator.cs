@@ -71,18 +71,16 @@ public class NeoAnimator : NeoComponent
             }
             else
             {
-                // apply the end visual FIRST and fire the callback LAST so a callback
-                // that switches animations via Play() always wins over this branch
+                // apply the end visual FIRST and fire the callback LAST so a callback that switches animations via Play() always wins
                 if (_animation.HoldLastFrame)
                 {
-                    // stay on the last frame so the sprite keeps showing
+                    // stay on the last frame so the sprite doesn't disappear somehow
                     CurrentFrameIndex = _animation.Frames.Count - 1;
                     ApplyFrame();
                 }
                 else if (_renderer is not null)
                 {
-                    // vanish instead: an empty source rect draws nothing and also
-                    // zeroes the renderer bounds so sprite colliders die with the sprite
+                    // vanish when finish play.
                     _renderer.SourceRectangle = Rectangle.Empty;
                 }
 

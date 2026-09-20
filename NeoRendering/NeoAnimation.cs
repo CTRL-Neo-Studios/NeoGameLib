@@ -15,8 +15,6 @@ public class NeoAnimation
     public bool HoldLastFrame { get; }
 
     // holdLastFrame: when a non-looping animation ends, keep showing the last frame
-    // (default). false = clear the sprite so it vanishes into thin air like a ghost.
-    // does jack shit when Loop is true, obv
     public NeoAnimation(List<Rectangle> frames, float frameDuration, bool loop = true, bool holdLastFrame = true)
     {
         Frames = frames;

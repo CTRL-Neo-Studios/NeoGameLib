@@ -33,7 +33,7 @@ NeoAnimation run = NeoAnimation.FromGrid(new Point(6, 4), new Point(32, 32), 0.1
 // padding = gap between cells, margin = sheet top-left offset, both in px:
 NeoAnimation padded = NeoAnimation.FromGrid(new Point(6, 4), new Point(32, 32), 0.1f, padding: new Point(2), margin: new Point(4));
 // horizontalFirst: setting to false walks down each column first instead of across each row
-// holdLastFrame: false (on non-looping anims) clears the sprite when it ends instead of holding the last frame:
+// holdLastFrame: false clears the sprite when it ends instead of holding the last frame. for non-looping-animations where it needs a one-off end
 NeoAnimation vanish = NeoAnimation.FromGrid(new Point(4, 6), new Point(32, 32), 0.08f, loop: false, holdLastFrame: false);
 ```
 
