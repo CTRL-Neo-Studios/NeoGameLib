@@ -94,6 +94,16 @@ public class NeoObject
         return GetComponent<T>() is not null;
     }
 
+    public bool HasComponent(Type type)
+    {
+        if (type is null) return false;
+        
+        foreach (var component in _components)
+            if (type.IsAssignableFrom(component.GetType())) return true;
+        
+        return false;
+    }
+
     public bool RemoveComponent(NeoComponent component)
     {
         if (component is null || !_components.Remove(component))

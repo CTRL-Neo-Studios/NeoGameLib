@@ -97,3 +97,17 @@ spawnTimer.OnFinished = () => spawnTimer.Start();
 
 // Stop kills it (fires OnStop), Pause/Resume freeze the countdown (fire OnPause/OnResume), OnStart fires on every Start, TimeLeft is the remaining seconds
 ```
+
+for movement: one movement logic component does keys, Move(), lerp, gravity, jump and ground detection. everything optional
+
+note to future self: you're welcome in advance. i find myself having to write the same movement code in two projects so might as well write a general purpose component that moves sprites instead.
+
+```csharp
+NeoMover mover = player.AddComponent<NeoMover>();
+mover.KeyLeft = Keys.A;
+mover.KeyRight = Keys.D;
+mover.KeyJump = Keys.Space;
+mover.GroundComponentType = typeof(GroundTag); // needs a NeoBoxCollider on the same object
+// keys are intentionally options so you can just move it with the move function
+// mover.Gravity = 0 to fly, Omnidirectional = false for platformer-style, UseLerp/LerpSnappiness tune smoothing
+```
