@@ -56,6 +56,20 @@ texts draw after sprites
 
 for colliders: two flavors, both register themselves on awake, collisions are computed automatically every frame after the world update
 
+**!New in Collider Architecture!**
+
+1. Interface-based collider callbacks
+
+So, before this change, the right way of using a collider would be creating a new class that inherits the collider class used, adding that to the object, and then having it call other components' functions when a collision happens.
+Too much steps and too much inheritance, and so I'm making it interface-based: now you only have to add the collider component to the object, implement the Collision interface in other components in the same object, and the collider component will
+automatically call the interface functions on collision. Easier to setup, and makes it more easier to check which object has a collider as oyu can just now look for a collider component instead of looking for a component that had inherited the collider component.
+
+2. World-based collisions
+3. 
+since the introduction of World Man. and multiple-world-loading, object collisions are now cross-worlds, which means that objects in different worlds can collide with each other and so on -- which maybe is some cases is great if you want
+worlds to contain only one type of game objects and the other, but not particularly great in the use case described in the architecture note below where UI and game objects are in two different worlds. Not good. So I had to update the collider architecture and I've decided
+to make it somewhat "list-based":
+
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
 protected override void OnLoadContent(ContentManager CM)
 {
@@ -72,17 +86,28 @@ protected override void OnLoadContent(ContentManager CM)
 }
 ```
 
-react to hits by subclassing and overriding OnCollision:
+react to hits with a plain component implementing ICollision on the same object, no subclassing colliders. add/remove these components to add/remove collision behavior:
 
 ```csharp
-public class HurtBox : NeoBoxCollider
+public class HurtBox : NeoComponent, ICollision
 {
-    public override void OnCollision(NeoCollision collision)
+    public void OnCollision(NeoBoxCollider other, NeoCollision collision)
     {
-        // both sides get the call with the same collision obj so you have to figure out which collision object is yourself
-        NeoBoxCollider other = collision.A == this ? collision.B : collision.A;
+        // `other` is the collider on the object you hit, no A==this dance
     }
 }
+
+// object setup: the collider plus any number of ICollision components
+player.AddComponent<NeoSpriteCollider>();
+player.AddComponent(new HurtBox());
+```
+
+layer gate for keeping worlds' collisions separate (ui world vs game world):
+
+```csharp
+uiCollider.CollisionLayer = 0;               uiCollider.CollisionMask = ~(1 << 1); // ui accepts everything but game
+gameCollider.CollisionLayer = 1;             gameCollider.CollisionMask = ~(1 << 0); // game accepts everything but ui
+// enemies and players in different worlds but sharing a layer still collide, that's the point
 ```
 
 for timers: reusable individual countdown timers without the need to attach to specific objects. but it's ideally used in a component or an object.
@@ -110,4 +135,34 @@ mover.KeyJump = Keys.Space;
 mover.GroundComponentType = typeof(GroundTag); // needs a NeoBoxCollider on the same object
 // keys are intentionally options so you can just move it with the move function
 // mover.Gravity = 0 to fly, Omnidirectional = false for platformer-style, UseLerp/LerpSnappiness tune smoothing
+```
+
+for worlds: registry of ALL worlds. Load pulls registered ones into the running set (any number at once, or none), Unload kicks one out and destroys its objects. objects are built on Load, not create
+
+Initially I was actually thinking of making the World Man.utility based instead of being a full-on registry-like-manager. But I was considering possible use cases such as worlds for UI-only and worlds for game objects only for better organization, and so I thought
+hey, how about just change to the registry-manager architecture instead? So, this architecture should be able to solve the object-layers problem which is just object on different layers but instead of layers it's now different worlds. This does affect things a bit,
+especially the collision where now collision is world-agnostic -- meaning that colliders in different worlds can collide with each other. This is a nuisance particularly for the use-case I've described, which means I have to change the collision bus architecture. See my updated note above for how collision works after the new world loading architecture.
+
+In addition to that, notice that I specify "registry-manager": this is not a full-save-state-registry manager in a traditional sense that saves the "snapshot" and "state" of a world; it's more like a registry-keeper manager that keeps in track of what worlds you load and that's that. Does not keep track of the worlds' states and created objects in its registry.
+For that to happen I'd actually need to write-load files and I'm NOT LOOKING TO MAKE A UNITY REPLICA. If I want Unity, I'd use unity, but this is MonoGame and fundamental architectures are different.
+
+Here's an example usage where a world only contains UI objects and another world contains only game-related objects.
+
+```csharp
+WorldManager.CreateWorld("ui", w => { /* build hud objects */ });
+WorldManager.CreateWorld("level1", w => { /* build game objects */ });
+WorldManager.Load("ui"); // builds using the registered builder function and starts running in the update tick loop
+WorldManager.Load("level1"); // same as above
+NeoObject hud = WorldManager.GetWorld("ui").FindObjectByComponent<HudManagerOrSmthLikeThat>(); // querying across worlds
+WorldManager.Unload("level1"); // destroys all objects in the world as a non-reversible action. the world is still in the registry and can be reloaded.
+WorldManager.Load("level1"); // rebuilt from the builder function. please make sure you did read my architecture notes above before using this, future self
+WorldManager.RenameWorld("ui", "hud"); // renames world "ui" to the new name "hud"
+```
+
+for assets: cached loads and uses the path as key
+
+```csharp
+Texture2D bot = Assets.Load<Texture2D>("Sprites/bot"); // cache and load and quick reference/loading
+Assets.Unload("Sprites/bot"); // removes cache
+Assets.UnloadAll();
 ```
