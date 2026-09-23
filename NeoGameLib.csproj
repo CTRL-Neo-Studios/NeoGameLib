@@ -3,7 +3,7 @@
     <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     
     <PackageId>NeoGameLib</PackageId>
-    <Version>0.1.7</Version>
+    <Version>0.2.0</Version>
     <Authors>Type-32</Authors>
     <Company>CTRL Neo Studios</Company>
     <Description>NeoGameLib: prefab framework for monogame that packs a lot of punch, with simple collision bus, render bus, etc.</Description>
