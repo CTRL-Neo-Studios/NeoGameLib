@@ -23,6 +23,8 @@ public class NeoGame : Game
     private NeoRenderBus _renderBus;
     private NeoColliderBus _colliderBus;
     private NeoTimerBus _timerBus;
+    private WorldManager _worldManager;
+    private AssetManager _assetManager;
 
     public static NeoGame? Singleton { get; private set; }
 
@@ -30,6 +32,8 @@ public class NeoGame : Game
     public NeoRenderBus RenderBus => _renderBus;
     public NeoColliderBus ColliderBus => _colliderBus;
     public NeoTimerBus TimerBus => _timerBus;
+    public WorldManager WorldManager => _worldManager;
+    public AssetManager Assets => _assetManager;
 
     public NeoGame()
     {
@@ -45,8 +49,10 @@ public class NeoGame : Game
         // note to self:
         // monoGame runs LoadContent() from the TAIL of base.Initialize(), not after it, so the buses MUST be created before base.Initialize() or every OnLoadContent that adds a renderer/collider/timer NREs on a null bus. it's also why OnLoadContent fires before OnInitialize since LoadContent happens inside base.Initialize()
         _renderBus = new NeoRenderBus(_gdm);
-        _colliderBus = new NeoColliderBus();
+        _worldManager = new WorldManager();
+        _colliderBus = new NeoColliderBus(_worldManager);
         _timerBus = new NeoTimerBus();
+        _assetManager = new AssetManager(Content);
 
         base.Initialize();
         OnInitialize();
@@ -63,6 +69,7 @@ public class NeoGame : Game
     {
         base.Update(gameTime);
         OnUpdate(gameTime);
+        WorldManager.Update(gameTime);
         ColliderBus.Update();
         TimerBus.Update(gameTime);
     }
