@@ -14,7 +14,12 @@ public class NeoWorld
     private List<NeoObject> _objects = new();
     private List<NeoObject> _objectDestroyQueue = new();
 
-    public string Name { get => _name; }
+    // note: internal set so renames go through WorldMan's RenameWorld function and updates the registry key. Don't manually update this otherwise the registry key in WorldMan would desync
+    public string Name
+    {
+        get => _name;
+        internal set => _name = value;
+    }
     public List<NeoObject> Objects { get => _objects; }
 
     public NeoWorld(string name)
@@ -80,6 +85,17 @@ public class NeoWorld
         _objectDestroyQueue.Clear();
     }
     
+    // note to future self:
+    // destroys all objects immediately and therefore invokes OnDestroy() on all components and unregisters themselves from the event buses.
+    public void Clear()
+    {
+        foreach (NeoObject obj in _objects)
+            obj.DestroyImmediate();
+
+        _objects.Clear();
+        _objectDestroyQueue.Clear();
+    }
+
     #region THe Find/Query Functions
     // note to future self here:
     // hey you might be wondering why im not using Nullable<T> since in unity we do nullable types almost EVERYWHERE (bad practice ik)

@@ -65,10 +65,12 @@ Too much steps and too much inheritance, and so I'm making it interface-based: n
 automatically call the interface functions on collision. Easier to setup, and makes it more easier to check which object has a collider as oyu can just now look for a collider component instead of looking for a component that had inherited the collider component.
 
 2. World-based collisions
-3. 
+
 since the introduction of World Man. and multiple-world-loading, object collisions are now cross-worlds, which means that objects in different worlds can collide with each other and so on -- which maybe is some cases is great if you want
 worlds to contain only one type of game objects and the other, but not particularly great in the use case described in the architecture note below where UI and game objects are in two different worlds. Not good. So I had to update the collider architecture and I've decided
-to make it somewhat "list-based":
+to make it somewhat "list-based": I could make a list of worlds in which object collisions are detected with one another, and worlds outside of that list don't share collision  
+detections. So, "ui" world could be a separate list, where "enemies" and "players" worlds can be in the same collision list. This may be a bit redundant as I might have to create a separate  
+list for one world. This does make Collision Bus rely on the World Man. more than intended but I'm advocating creating worlds through World Man. instead of creating world objects outside of the registry, so I guess that checks out itself.
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
 protected override void OnLoadContent(ContentManager CM)
@@ -93,21 +95,20 @@ public class HurtBox : NeoComponent, ICollision
 {
     public void OnCollision(NeoBoxCollider other, NeoCollision collision)
     {
-        // `other` is the collider on the object you hit, no A==this dance
+        // `other` is the collider on the object you hit
     }
 }
 
-// object setup: the collider plus any number of ICollision components
 player.AddComponent<NeoSpriteCollider>();
 player.AddComponent(new HurtBox());
 ```
 
-layer gate for keeping worlds' collisions separate (ui world vs game world):
+world collision groups: worlds listed together share collision detection while worlds aren't listed does not interact with the listed worlds. ungrouped worlds collide with all other ungrouped worlds
 
 ```csharp
-uiCollider.CollisionLayer = 0;               uiCollider.CollisionMask = ~(1 << 1); // ui accepts everything but game
-gameCollider.CollisionLayer = 1;             gameCollider.CollisionMask = ~(1 << 0); // game accepts everything but ui
-// enemies and players in different worlds but sharing a layer still collide, that's the point
+WorldManager.GroupCollisions("ui", "ui"); // ui only collides with ui world objects
+WorldManager.GroupCollisions("gameplay", "players", "enemies"); // gameplay world objects collides with players and enemies world objects
+WorldManager.UngroupCollisions("ui"); // collides with everything in the ungrouped section
 ```
 
 for timers: reusable individual countdown timers without the need to attach to specific objects. but it's ideally used in a component or an object.

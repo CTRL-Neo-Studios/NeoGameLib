@@ -33,10 +33,6 @@ public class NeoBoxCollider : NeoComponent
         }
     }
 
-    // the hit function the NeoColliderBus calls (once per overlap with another collider/every frame they stay overlapped)
-    // both colliders in the pair get the call with the same collision obj so REMEMBER to check which side you are with using smth like `collision.A == this`; YOU HAVE BEEN WARNED
-    public virtual void OnCollision(NeoCollision collision) { }
-
     public override void OnAwake()
     {
         NeoGame.Singleton?.ColliderBus.Add(this);
