@@ -2,6 +2,7 @@
 using NeoGameLib.NeoGO;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 
 namespace NeoGameLib.NeoRendering;
 
@@ -123,5 +124,13 @@ public class NeoSpriteRenderer : NeoComponent
             default:
                 return false;
         }
+    }
+
+    // note to self:
+    // true if the mouse cursor is over this sprite's world-space bounds.
+    // there's no camera system yet so window coords == world coords, but if a camera system is added, do change this to account for the camera transform.
+    public bool IsCursorOnSprite()
+    {
+        return Bounds.Contains(Mouse.GetState().Position);
     }
 }
