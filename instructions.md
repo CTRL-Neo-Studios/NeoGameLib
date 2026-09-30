@@ -167,3 +167,49 @@ Texture2D bot = Assets.Load<Texture2D>("Sprites/bot"); // cache and load and qui
 Assets.Unload("Sprites/bot"); // removes cache
 Assets.UnloadAll();
 ```
+
+---
+
+file-system i/o: File as an object, Folder as an object
+
+This is mostly inspired by Tauri V2's Store class. Essentially, Tauri provides the Store class that provides load/write/other-object-manipulation functions that represents one .json file.
+
+For example:
+```typescript
+const config: Store = new Store("config.json"); // auto loads the file in question in constructor
+await config.load(); // load function that loads the file into the buffer which the class holds
+await config.save(); // save function that writes the class-held buffer data into the file
+await config.get<MyJsonType>("key");
+await config.set<MyJsonType>("key", obj as MyJsonType);
+```
+
+I want to up their game in this library. Tauri's store stores the json data as a custom-value-typed dictionary where developers can customize string keys and correspoding value types and objects, and get-set them. If
+the file isn't in the system in the first place, the class would automatically create the file.
+
+So you'd load, get, set, and save.
+
+In this library it should work somewhere similar to this:
+
+```csharp
+FileStore config = new FileStore(Path.Combine(Directory.GetCurrentDirectory(), "Data", "myfile.json"));
+
+config.load(); // the actual file read, loads file contents to buffer
+
+string allLinesContent = config.get(); // loads all file lines, including the return line as \n.
+List<string> contents = config.getAsLines(); // loads file lines as string lists, each return line counts as one line, does not include \n.
+
+config.set(allLinesContent); // function that writes into one single line with the return lines having to be manually inserted by the developer
+config.set(contents); // function that writes into different lines as how developer had set the string lists as.
+
+config.write(); // the actual file write op that writes buffer into file
+```
+
+And this would be a base class that could be inherited into something like `JsonStore` or `TomlStore` or `YamlStore`.
+
+As for folders: (temporary thought, NEEDS TO BE REVISED)
+```csharp
+FolderStore folder = new FolderStore(Path.Combine(Directory.GetCurrentDirectory(), "Data"));
+
+folder.load(); // loads the paths into the folder buffer as a List of strings.
+FileStore cfg = folder.instantiate<FileStore>(Path.Combine("config.txt")); // finds config.txt, creates a FileStore based on it.
+```
