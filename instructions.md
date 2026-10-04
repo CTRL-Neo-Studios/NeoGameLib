@@ -222,6 +222,13 @@ int nope = save.Get<int>("missing"); // gets 0 by default. For any other type, g
 save.Write();
 ```
 
+custom classes/structs should work too, i.e. MonoGame's classes/structs. which should be a must if you think about it
+
+```csharp
+WorldPlayersData wpd = save.Get<WorldPlayersData>("wpd"); // missing key would return null
+save.Set("wpd", wpd);
+```
+
 As for folders: (temporary thought, NEEDS TO BE REVISED)
 
 ```csharp
