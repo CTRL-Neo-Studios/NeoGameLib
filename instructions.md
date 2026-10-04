@@ -167,3 +167,74 @@ Texture2D bot = Assets.Load<Texture2D>("Sprites/bot"); // cache and load and qui
 Assets.Unload("Sprites/bot"); // removes cache
 Assets.UnloadAll();
 ```
+
+---
+
+file-system i/o: File as an object, Folder as an object
+
+This is mostly inspired by Tauri V2's Store class. Essentially, Tauri provides the Store class that provides load/write/other-object-manipulation functions that represents one .json file.
+
+For example:
+```typescript
+const config: Store = new Store("config.json"); // auto loads the file in question in constructor
+await config.load(); // load function that loads the file into the buffer which the class holds
+await config.save(); // save function that writes the class-held buffer data into the file
+await config.get<MyJsonType>("key");
+await config.set<MyJsonType>("key", obj as MyJsonType);
+```
+
+I want to up their game in this library. Tauri's store stores the json data as a custom-value-typed dictionary where developers can customize string keys and correspoding value types and objects, and get-set them. If
+the file isn't in the system in the first place, the class would automatically create the file.
+
+So you'd load, get, set, and save.
+
+In this library it should work somewhere similar to this:
+
+```csharp [InsideAClassInheritingNeoGameClass.cs]
+FileStore cfg = new FileStore(Path.Combine(Directory.GetCurrentDirectory(), "Data", "config.txt"));
+
+cfg.Load(); // reads the file into the buffer; a missing file AND folder get created
+
+string raw = cfg.Get();                // whole buffer, line breaks intact as \n
+List<string> lines = cfg.GetAsLines(); // split into lines, no \n, \r\n normalized
+
+cfg.Set("hello\nworld");                      // replace the buffer verbatim, line breaks are on you
+cfg.Set(new List<string> { "hello", "world" }); // each entry becomes one line
+
+cfg.Write(); // pushes the buffer to disk
+```
+
+And this would be a base class that could be inherited into something like `JsonStore` or `TomlStore` or `YamlStore`.
+
+Maybe for `JsonStore`, which should inherit FileStore class and use buffer as json string instead, and have its own separate buffer json object data so it can write to json string into text buffer then into the file.
+
+```csharp
+JsonStore save = new JsonStore(Path.Combine(Directory.GetCurrentDirectory(), "Data", "save.json"));
+save.Load();
+
+save.Set("playerName", "Neo");
+save.Set("gold", 420);
+
+string name = save.Get<string>("playerName"); // "Neo"
+int gold = save.Get<int>("gold"); // 420
+int nope = save.Get<int>("missing"); // gets 0 by default. For any other type, gets that type's default value. or should throw an exception instead
+
+save.Write();
+```
+
+custom classes/structs should work too, i.e. MonoGame's classes/structs. which should be a must if you think about it
+
+```csharp
+WorldPlayersData wpd = save.Get<WorldPlayersData>("wpd"); // missing key would return null
+save.Set("wpd", wpd);
+```
+
+As for folders: (temporary thought, NEEDS TO BE REVISED)
+
+```csharp
+FolderStore data = new FolderStore(Path.Combine(Directory.GetCurrentDirectory(), "Data"));
+data.Load(); // lists every top-level file into file list buffer
+
+FileStore txt = data.Instantiate<FileStore>("config.txt");
+JsonStore json = data.Instantiate<JsonStore>("save.json");
+```
