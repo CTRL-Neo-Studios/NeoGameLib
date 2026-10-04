@@ -190,26 +190,44 @@ So you'd load, get, set, and save.
 
 In this library it should work somewhere similar to this:
 
-```csharp
-FileStore config = new FileStore(Path.Combine(Directory.GetCurrentDirectory(), "Data", "myfile.json"));
+```csharp [InsideAClassInheritingNeoGameClass.cs]
+FileStore cfg = new FileStore(Path.Combine(Directory.GetCurrentDirectory(), "Data", "config.txt"));
 
-config.load(); // the actual file read, loads file contents to buffer
+cfg.Load(); // reads the file into the buffer; a missing file AND folder get created
 
-string allLinesContent = config.get(); // loads all file lines, including the return line as \n.
-List<string> contents = config.getAsLines(); // loads file lines as string lists, each return line counts as one line, does not include \n.
+string raw = cfg.Get();                // whole buffer, line breaks intact as \n
+List<string> lines = cfg.GetAsLines(); // split into lines, no \n, \r\n normalized
 
-config.set(allLinesContent); // function that writes into one single line with the return lines having to be manually inserted by the developer
-config.set(contents); // function that writes into different lines as how developer had set the string lists as.
+cfg.Set("hello\nworld");                      // replace the buffer verbatim, line breaks are on you
+cfg.Set(new List<string> { "hello", "world" }); // each entry becomes one line
 
-config.write(); // the actual file write op that writes buffer into file
+cfg.Write(); // pushes the buffer to disk
 ```
 
 And this would be a base class that could be inherited into something like `JsonStore` or `TomlStore` or `YamlStore`.
 
-As for folders: (temporary thought, NEEDS TO BE REVISED)
-```csharp
-FolderStore folder = new FolderStore(Path.Combine(Directory.GetCurrentDirectory(), "Data"));
+Maybe for `JsonStore`, which should inherit FileStore class and use buffer as json string instead, and have its own separate buffer json object data so it can write to json string into text buffer then into the file.
 
-folder.load(); // loads the paths into the folder buffer as a List of strings.
-FileStore cfg = folder.instantiate<FileStore>(Path.Combine("config.txt")); // finds config.txt, creates a FileStore based on it.
+```csharp
+JsonStore save = new JsonStore(Path.Combine(Directory.GetCurrentDirectory(), "Data", "save.json"));
+save.Load();
+
+save.Set("playerName", "Neo");
+save.Set("gold", 420);
+
+string name = save.Get<string>("playerName"); // "Neo"
+int gold = save.Get<int>("gold"); // 420
+int nope = save.Get<int>("missing"); // gets 0 by default. For any other type, gets that type's default value. or should throw an exception instead
+
+save.Write();
+```
+
+As for folders: (temporary thought, NEEDS TO BE REVISED)
+
+```csharp
+FolderStore data = new FolderStore(Path.Combine(Directory.GetCurrentDirectory(), "Data"));
+data.Load(); // lists every top-level file into file list buffer
+
+FileStore txt = data.Instantiate<FileStore>("config.txt");
+JsonStore json = data.Instantiate<JsonStore>("save.json");
 ```
