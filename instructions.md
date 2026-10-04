@@ -56,7 +56,7 @@ texts draw after sprites
 
 for colliders: two flavors, both register themselves on awake, collisions are computed automatically every frame after the world update
 
-**!New in Collider Architecture!**
+**(update 0.2.0) !New in Collider Architecture!**
 
 1. Interface-based collider callbacks
 
@@ -138,6 +138,18 @@ mover.GroundComponentType = typeof(GroundTag); // needs a NeoBoxCollider on the 
 // mover.Gravity = 0 to fly, Omnidirectional = false for platformer-style, UseLerp/LerpSnappiness tune smoothing
 ```
 
+**(update 0.2.3)** colliders now stops the mover by default. when the mover overlaps a collider it is now "pushed" (moved in negative velocity) back out. also needs a NeoBoxCollider on the same object:
+
+```csharp
+mover.CollisionWhitelist.Add(typeof(TriggerTag)); // objects with these components are pass-through (everything else solid)
+mover.CollisionBlacklist.Add(typeof(SolidTag)); // ONLY these objects are solid (everything else pass-through)
+// both lists empty = everything is solid
+// you can use the generic helpers to add/remove tags to/from the lists
+```
+
+mover.Velocity is now exposed in case if you want to write your own collision correction.
+Grounded property is still determined via GroundComponentType tags
+
 for worlds: registry of ALL worlds. Load pulls registered ones into the running set (any number at once, or none), Unload kicks one out and destroys its objects. objects are built on Load, not create
 
 Initially I was actually thinking of making the World Man.utility based instead of being a full-on registry-like-manager. But I was considering possible use cases such as worlds for UI-only and worlds for game objects only for better organization, and so I thought
@@ -195,10 +207,10 @@ FileStore cfg = new FileStore(Path.Combine(Directory.GetCurrentDirectory(), "Dat
 
 cfg.Load(); // reads the file into the buffer; a missing file AND folder get created
 
-string raw = cfg.Get();                // whole buffer, line breaks intact as \n
+string raw = cfg.Get(); // whole buffer, line breaks intact as \n
 List<string> lines = cfg.GetAsLines(); // split into lines, no \n, \r\n normalized
 
-cfg.Set("hello\nworld");                      // replace the buffer verbatim, line breaks are on you
+cfg.Set("hello\nworld"); // replace the buffer verbatim, line breaks are on you
 cfg.Set(new List<string> { "hello", "world" }); // each entry becomes one line
 
 cfg.Write(); // pushes the buffer to disk
