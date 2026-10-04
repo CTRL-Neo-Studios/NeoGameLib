@@ -29,6 +29,10 @@ public class NeoColliderBus : NeoBus<NeoBoxCollider>
     public List<NeoCollision> Collisions => _collisions;
 
     // note to self:
+    // the live registered collider list mainly for the mover to do per-axis collision correction (using last frame's Collisions would make collisions lag one frame, and it is VERY NOTICABLE)
+    public List<NeoBoxCollider> Colliders => Items;
+
+    // note to self:
     // worldManager is optional.
     // passing in a null would make everything collide with everything. passing one in would make world collision groups on it start running collision checks
     public NeoColliderBus(WorldManager worldManager = null)
