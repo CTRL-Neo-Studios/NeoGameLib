@@ -28,8 +28,11 @@ public class NeoInputBus : NeoBus<NeoInputMap>
         _previous = current;
     }
 
-    // the map's Subscribe/Unsubscribe call these. dedupe=false allows duplicate
-    // registrations (the map refreshes multiple times, idempotent but wasteful)
+    /// <summary>
+    /// called by the input maps' to sub to input updates.
+    /// </summary>
+    /// <param name="map">the input map calling this func</param>
+    /// <param name="dedupe">`dedupe = false` allows duplicate registrations of the same map but ideally this shouldn't be `false`, and no duplicate maps should register.</param>
     internal void Register(NeoInputMap map, bool dedupe)
     {
         if (dedupe)
@@ -41,6 +44,11 @@ public class NeoInputBus : NeoBus<NeoInputMap>
         Items.Add(map);
     }
 
+    /// <summary>
+    /// called by input maps to unsub from input updates.
+    /// </summary>
+    /// <param name="map">the input map calling this func</param>
+    /// <param name="dedupe">`dedupe = true` removes all duplicate registrations of the same map. ideally this should be `true` by default</param>
     internal void Unregister(NeoInputMap map, bool dedupe)
     {
         if (dedupe)
