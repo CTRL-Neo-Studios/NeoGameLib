@@ -1,6 +1,7 @@
 using NeoGameLib.Common;
 using NeoGameLib.NeoCollision;
 using NeoGameLib.NeoGO;
+using NeoGameLib.NeoInput;
 using NeoGameLib.NeoRendering;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
@@ -23,6 +24,7 @@ public class NeoGame : Game
     private NeoRenderBus _renderBus;
     private NeoColliderBus _colliderBus;
     private NeoTimerBus _timerBus;
+    private NeoInputBus _inputBus;
     private WorldManager _worldManager;
     private AssetManager _assetManager;
 
@@ -32,6 +34,7 @@ public class NeoGame : Game
     public NeoRenderBus RenderBus => _renderBus;
     public NeoColliderBus ColliderBus => _colliderBus;
     public NeoTimerBus TimerBus => _timerBus;
+    public NeoInputBus InputBus => _inputBus;
     public WorldManager WorldManager => _worldManager;
     public AssetManager Assets => _assetManager;
 
@@ -52,6 +55,7 @@ public class NeoGame : Game
         _worldManager = new WorldManager();
         _colliderBus = new NeoColliderBus(_worldManager);
         _timerBus = new NeoTimerBus();
+        _inputBus = new NeoInputBus();
         _assetManager = new AssetManager(Content);
 
         base.Initialize();
@@ -68,6 +72,7 @@ public class NeoGame : Game
     protected sealed override void Update(GameTime gameTime)
     {
         base.Update(gameTime);
+        InputBus.Update(); // input lifecycle runs first so everything collected will be accessible by lifecycles below
         OnUpdate(gameTime);
         WorldManager.Update(gameTime);
         ColliderBus.Update();

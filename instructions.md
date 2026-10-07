@@ -1,4 +1,4 @@
-for animation: Make a spritesheet and import it, and then do smth like this
+[0.1.x] for animation: Make a spritesheet and import it, and then do smth like this
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
 protected override void OnLoadContent(ContentManager CM)
@@ -37,7 +37,9 @@ NeoAnimation padded = NeoAnimation.FromGrid(new Point(6, 4), new Point(32, 32), 
 NeoAnimation vanish = NeoAnimation.FromGrid(new Point(4, 6), new Point(32, 32), 0.08f, loop: false, holdLastFrame: false);
 ```
 
-for text: add a SpriteFont asset in the mgcb editor, then smth like this
+---
+
+[0.1.x] for text: add a SpriteFont asset in the mgcb editor, then smth like this
 
 ```csharp [AlsoInsideAClassInheritingNeoGameClass.cs]
 protected override void OnLoadContent(ContentManager CM)
@@ -54,9 +56,11 @@ protected override void OnLoadContent(ContentManager CM)
 
 texts draw after sprites
 
-for colliders: two flavors, both register themselves on awake, collisions are computed automatically every frame after the world update
+---
 
-**(update 0.2.0) !New in Collider Architecture!**
+[0.1.x] for colliders: two flavors, both register themselves on awake, collisions are computed automatically every frame after the world update
+
+**[0.2.0] !New in Collider Architecture!**
 
 1. Interface-based collider callbacks
 
@@ -124,7 +128,9 @@ spawnTimer.OnFinished = () => spawnTimer.Start();
 // Stop kills it (fires OnStop), Pause/Resume freeze the countdown (fire OnPause/OnResume), OnStart fires on every Start, TimeLeft is the remaining seconds
 ```
 
-for movement: one movement logic component does keys, Move(), lerp, gravity, jump and ground detection. everything optional
+---
+
+[0.2.0] for movement: one movement logic component does keys, Move(), lerp, gravity, jump and ground detection. everything optional
 
 note to future self: you're welcome in advance. i find myself having to write the same movement code in two projects so might as well write a general purpose component that moves sprites instead.
 
@@ -138,7 +144,7 @@ mover.GroundComponentType = typeof(GroundTag); // needs a NeoBoxCollider on the 
 // mover.Gravity = 0 to fly, Omnidirectional = false for platformer-style, UseLerp/LerpSnappiness tune smoothing
 ```
 
-**(update 0.2.3)** colliders now stops the mover by default. when the mover overlaps a collider it is now "pushed" (moved in negative velocity) back out. also needs a NeoBoxCollider on the same object:
+[0.2.3] colliders now stops the mover by default. when the mover overlaps a collider it is now "pushed" (moved in negative velocity) back out. also needs a NeoBoxCollider on the same object:
 
 ```csharp
 mover.CollisionWhitelist.Add(typeof(TriggerTag)); // objects with these components are pass-through (everything else solid)
@@ -150,7 +156,31 @@ mover.CollisionBlacklist.Add(typeof(SolidTag)); // ONLY these objects are solid 
 mover.Velocity is now exposed in case if you want to write your own collision correction.
 Grounded property is still determined via GroundComponentType tags
 
-for worlds: registry of ALL worlds. Load pulls registered ones into the running set (any number at once, or none), Unload kicks one out and destroys its objects. objects are built on Load, not create
+---
+
+[0.2.4] for inputs: an action map over the keyboard. you can map keys to named actions, query key states and axis values. input maps collects inputs as the first lifecycle in the update tick, so other update-tick lifecycles are able to read the latest input states and values.
+
+```csharp [InsideAClassInheritingNeoGameClass.cs]
+NeoInputMap gameplay = new();
+
+gameplay.AddDigital("jump", Keys.Space, Keys.W); // any key given fires the action
+gameplay.AddAxis("moveX", NeoAxisRange.Full, Keys.D, Keys.A); // positive key, negative key
+
+gameplay.Subscribe(); // registers itself on NeoGame.InputBus
+
+gameplay.IsDown("jump");
+gameplay.IsPressed("jump");
+gameplay.IsReleased("jump");
+gameplay.GetAxis("moveX");
+
+// NeoAxisRange's enum options has documentations on them. Check intellisense
+```
+
+trying to query an action that wasn't mapped in the input map throws an exception. that includes typos. (You're welcome, future me)
+
+---
+
+[0.2.0] for worlds: registry of ALL worlds. Load pulls registered ones into the running set (any number at once, or none), Unload kicks one out and destroys its objects. objects are built on Load, not create
 
 Initially I was actually thinking of making the World Man.utility based instead of being a full-on registry-like-manager. But I was considering possible use cases such as worlds for UI-only and worlds for game objects only for better organization, and so I thought
 hey, how about just change to the registry-manager architecture instead? So, this architecture should be able to solve the object-layers problem which is just object on different layers but instead of layers it's now different worlds. This does affect things a bit,
@@ -182,7 +212,7 @@ Assets.UnloadAll();
 
 ---
 
-file-system i/o: File as an object, Folder as an object
+[0.2.3] file-system i/o: File as an object, Folder as an object
 
 This is mostly inspired by Tauri V2's Store class. Essentially, Tauri provides the Store class that provides load/write/other-object-manipulation functions that represents one .json file.
 
