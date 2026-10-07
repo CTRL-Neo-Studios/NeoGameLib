@@ -66,7 +66,7 @@ public class NeoInputMap
     /// <param name="dedupe">If this input map is registered in the bus before, it won't register when you call this function</param>
     public void Subscribe(NeoInputBus bus = null, bool dedupe = true)
     {
-        (bus ?? NeoGame.Singleton?.InputBus)?.Add(this);
+        (bus ?? NeoGame.Singleton?.InputBus)?.Register(this, dedupe);
     }
 
     /// <summary>
@@ -76,7 +76,7 @@ public class NeoInputMap
     /// <param name="dedupe">If this input map has been registered more than once, unsubscribing with dedupe will unsub ALL instances of this input map from the bus</param>
     public void Unsubscribe(NeoInputBus bus = null, bool dedupe = true)
     {
-        (bus ?? NeoGame.Singleton?.InputBus)?.Remove(this);
+        (bus ?? NeoGame.Singleton?.InputBus)?.Unregister(this, dedupe);
     }
 
     // the bus calls this every frame with its prev/current snapshots, don't touch
