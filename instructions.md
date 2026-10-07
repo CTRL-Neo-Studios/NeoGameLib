@@ -1,3 +1,27 @@
+[0.2.0] for worlds: registry of ALL worlds. Load pulls registered ones into the running set (any number at once, or none), Unload kicks one out and destroys its objects. objects are built on Load, not create
+
+Initially I was actually thinking of making the World Man.utility based instead of being a full-on registry-like-manager. But I was considering possible use cases such as worlds for UI-only and worlds for game objects only for better organization, and so I thought
+hey, how about just change to the registry-manager architecture instead? So, this architecture should be able to solve the object-layers problem which is just object on different layers but instead of layers it's now different worlds. This does affect things a bit,
+especially the collision where now collision is world-agnostic -- meaning that colliders in different worlds can collide with each other. This is a nuisance particularly for the use-case I've described, which means I have to change the collision bus architecture. See my updated note above for how collision works after the new world loading architecture.
+
+In addition to that, notice that I specify "registry-manager": this is not a full-save-state-registry manager in a traditional sense that saves the "snapshot" and "state" of a world; it's more like a registry-keeper manager that keeps in track of what worlds you load and that's that. Does not keep track of the worlds' states and created objects in its registry.
+For that to happen I'd actually need to write-load files and I'm NOT LOOKING TO MAKE A UNITY REPLICA. If I want Unity, I'd use unity, but this is MonoGame and fundamental architectures are different.
+
+Here's an example usage where a world only contains UI objects and another world contains only game-related objects.
+
+```csharp
+WorldManager.CreateWorld("ui", w => { /* build hud objects */ });
+WorldManager.CreateWorld("level1", w => { /* build game objects */ });
+WorldManager.Load("ui"); // builds using the registered builder function and starts running in the update tick loop
+WorldManager.Load("level1"); // same as above
+NeoObject hud = WorldManager.GetWorld("ui").FindObjectByComponent<HudManagerOrSmthLikeThat>(); // querying across worlds
+WorldManager.Unload("level1"); // destroys all objects in the world as a non-reversible action. the world is still in the registry and can be reloaded.
+WorldManager.Load("level1"); // rebuilt from the builder function. please make sure you did read my architecture notes above before using this, future self
+WorldManager.RenameWorld("ui", "hud"); // renames world "ui" to the new name "hud"
+```
+
+---
+
 [0.1.x] for animation: Make a spritesheet and import it, and then do smth like this
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
@@ -58,6 +82,28 @@ texts draw after sprites
 
 ---
 
+[0.2.4] for inputs: an action map over the keyboard. you can map keys to named actions, query key states and axis values. input maps collects inputs as the first lifecycle in the update tick, so other update-tick lifecycles are able to read the latest input states and values.
+
+```csharp [InsideAClassInheritingNeoGameClass.cs]
+NeoInputMap gameplay = new();
+
+gameplay.AddDigital("jump", Keys.Space, Keys.W); // any key given fires the action
+gameplay.AddAxis("moveX", NeoAxisRange.Full, Keys.D, Keys.A); // positive key, negative key
+
+gameplay.Subscribe(); // registers itself on NeoGame.InputBus
+
+gameplay.IsDown("jump");
+gameplay.IsPressed("jump");
+gameplay.IsReleased("jump");
+gameplay.GetAxis("moveX");
+
+// NeoAxisRange's enum options has documentations on them. Check intellisense
+```
+
+trying to query an action that wasn't mapped in the input map throws an exception. that includes typos. (You're welcome, future me)
+
+---
+
 [0.1.x] for colliders: two flavors, both register themselves on awake, collisions are computed automatically every frame after the world update
 
 **[0.2.0] !New in Collider Architecture!**
@@ -115,19 +161,6 @@ WorldManager.GroupCollisions("gameplay", "players", "enemies"); // gameplay worl
 WorldManager.UngroupCollisions("ui"); // collides with everything in the ungrouped section
 ```
 
-for timers: reusable individual countdown timers without the need to attach to specific objects. but it's ideally used in a component or an object.
-
-```csharp
-NeoTimer invuln = new(0.5f); // seconds
-invuln.OnFinished = () => { /* finish func here */ };
-invuln.Start(); // Start while running restarts from full
-
-// a sisyphus timer
-spawnTimer.OnFinished = () => spawnTimer.Start();
-
-// Stop kills it (fires OnStop), Pause/Resume freeze the countdown (fire OnPause/OnResume), OnStart fires on every Start, TimeLeft is the remaining seconds
-```
-
 ---
 
 [0.2.0] for movement: one movement logic component does keys, Move(), lerp, gravity, jump and ground detection. everything optional
@@ -158,49 +191,20 @@ Grounded property is still determined via GroundComponentType tags
 
 ---
 
-[0.2.4] for inputs: an action map over the keyboard. you can map keys to named actions, query key states and axis values. input maps collects inputs as the first lifecycle in the update tick, so other update-tick lifecycles are able to read the latest input states and values.
-
-```csharp [InsideAClassInheritingNeoGameClass.cs]
-NeoInputMap gameplay = new();
-
-gameplay.AddDigital("jump", Keys.Space, Keys.W); // any key given fires the action
-gameplay.AddAxis("moveX", NeoAxisRange.Full, Keys.D, Keys.A); // positive key, negative key
-
-gameplay.Subscribe(); // registers itself on NeoGame.InputBus
-
-gameplay.IsDown("jump");
-gameplay.IsPressed("jump");
-gameplay.IsReleased("jump");
-gameplay.GetAxis("moveX");
-
-// NeoAxisRange's enum options has documentations on them. Check intellisense
-```
-
-trying to query an action that wasn't mapped in the input map throws an exception. that includes typos. (You're welcome, future me)
-
----
-
-[0.2.0] for worlds: registry of ALL worlds. Load pulls registered ones into the running set (any number at once, or none), Unload kicks one out and destroys its objects. objects are built on Load, not create
-
-Initially I was actually thinking of making the World Man.utility based instead of being a full-on registry-like-manager. But I was considering possible use cases such as worlds for UI-only and worlds for game objects only for better organization, and so I thought
-hey, how about just change to the registry-manager architecture instead? So, this architecture should be able to solve the object-layers problem which is just object on different layers but instead of layers it's now different worlds. This does affect things a bit,
-especially the collision where now collision is world-agnostic -- meaning that colliders in different worlds can collide with each other. This is a nuisance particularly for the use-case I've described, which means I have to change the collision bus architecture. See my updated note above for how collision works after the new world loading architecture.
-
-In addition to that, notice that I specify "registry-manager": this is not a full-save-state-registry manager in a traditional sense that saves the "snapshot" and "state" of a world; it's more like a registry-keeper manager that keeps in track of what worlds you load and that's that. Does not keep track of the worlds' states and created objects in its registry.
-For that to happen I'd actually need to write-load files and I'm NOT LOOKING TO MAKE A UNITY REPLICA. If I want Unity, I'd use unity, but this is MonoGame and fundamental architectures are different.
-
-Here's an example usage where a world only contains UI objects and another world contains only game-related objects.
+for timers: reusable individual countdown timers without the need to attach to specific objects. but it's ideally used in a component or an object.
 
 ```csharp
-WorldManager.CreateWorld("ui", w => { /* build hud objects */ });
-WorldManager.CreateWorld("level1", w => { /* build game objects */ });
-WorldManager.Load("ui"); // builds using the registered builder function and starts running in the update tick loop
-WorldManager.Load("level1"); // same as above
-NeoObject hud = WorldManager.GetWorld("ui").FindObjectByComponent<HudManagerOrSmthLikeThat>(); // querying across worlds
-WorldManager.Unload("level1"); // destroys all objects in the world as a non-reversible action. the world is still in the registry and can be reloaded.
-WorldManager.Load("level1"); // rebuilt from the builder function. please make sure you did read my architecture notes above before using this, future self
-WorldManager.RenameWorld("ui", "hud"); // renames world "ui" to the new name "hud"
+NeoTimer invuln = new(0.5f); // seconds
+invuln.OnFinished = () => { /* finish func here */ };
+invuln.Start(); // Start while running restarts from full
+
+// a sisyphus timer
+spawnTimer.OnFinished = () => spawnTimer.Start();
+
+// Stop kills it (fires OnStop), Pause/Resume freeze the countdown (fire OnPause/OnResume), OnStart fires on every Start, TimeLeft is the remaining seconds
 ```
+
+---
 
 for assets: cached loads and uses the path as key
 
