@@ -19,6 +19,11 @@ public abstract class NeoComponent
         get => _parentObj.Transform;
     }
 
+    public NeoWorld ParentWorld
+    {
+        get => _parentObj.World;
+    }
+
     public bool Enabled
     {
         get => _enabled;

@@ -27,4 +27,28 @@ public class NeoInputBus : NeoBus<NeoInputMap>
 
         _previous = current;
     }
+
+    // the map's Subscribe/Unsubscribe call these. dedupe=false allows duplicate
+    // registrations (the map refreshes multiple times, idempotent but wasteful)
+    internal void Register(NeoInputMap map, bool dedupe)
+    {
+        if (dedupe)
+        {
+            Add(map); // Add already skips existing entries
+            return;
+        }
+
+        Items.Add(map);
+    }
+
+    internal void Unregister(NeoInputMap map, bool dedupe)
+    {
+        if (dedupe)
+        {
+            while (Items.Remove(map)) { }
+            return;
+        }
+
+        Items.Remove(map); // removes the first registration
+    }
 }
