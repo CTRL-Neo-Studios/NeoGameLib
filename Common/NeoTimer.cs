@@ -3,18 +3,12 @@ using System;
 namespace NeoGameLib.Common;
 
 // note to future self:
-// a standalone reusable timer. NOT a component, not attached to any object, just a
-// countdown you make once and Start/Stop/Pause/Resume forever, no need to new one up
-// every time you need a delay. (async/await DOES work in monogame btw, but a
-// Task.Delay doesn't pause with the game and cancelling it cleanly is a pain, so this)
+// a NON-component standalone reusable timer attachable to any object. Essentially the timer is a countdown you can make once and forget forever, or activate it via Start/Stop etc. functions
+// (while async/await DOES work in monogame, a Task.Delay doesn't pause with the game and cancelling it is a pain, so this is your asynchronous go-to.)
 //
-// callbacks (all Action, set like animator.OnAnimationFinished):
-//   OnStart / OnStop / OnPause / OnResume fire on the matching call
-//   OnFinished fires when time hits zero, then the timer goes back to idle
-// no Loop property: repeating = OnFinished = () => Start(), look at you go
+// you could make it loop like this: OnFinished = () => Start() and make it a sisyphus timer
 //
-// it registers with NeoGame.Singleton.TimerBus while running and unregisters on
-// stop/finish, so the bus never holds dead timers and restarting is free
+// it registers with NeoGame.Singleton.TimerBus while running and unregisters on stop/finish, so the bus never holds dead timers and restarting is practically free
 public class NeoTimer
 {
     public float Duration { get; set; }

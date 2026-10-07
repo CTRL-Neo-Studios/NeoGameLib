@@ -135,5 +135,25 @@ public class NeoWorld
 
         return list;
     }
+
+    // note to self:
+    // same queries as above but they hand back the COMPONENT directly, so no
+    // FindObjectByComponent<T>().GetComponent<T>() compounding
+    public T FindComponent<T>() where T : NeoComponent
+    {
+        foreach (NeoObject obj in _objects)
+            if (obj.TryGetComponent<T>(out T component)) return component;
+
+        return null;
+    }
+
+    public List<T> FindComponents<T>() where T : NeoComponent
+    {
+        List<T> list = new();
+        foreach (NeoObject obj in _objects)
+            if (obj.TryGetComponent<T>(out T component)) list.Add(component);
+
+        return list;
+    }
     #endregion
 }

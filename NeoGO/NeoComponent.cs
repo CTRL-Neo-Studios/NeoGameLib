@@ -19,6 +19,14 @@ public abstract class NeoComponent
         get => _parentObj.Transform;
     }
 
+    /// <summary>
+    /// A QoL Shorthand from `ParentObject.World`.
+    /// </summary>
+    public NeoWorld ParentWorld
+    {
+        get => _parentObj.World;
+    }
+
     public bool Enabled
     {
         get => _enabled;
