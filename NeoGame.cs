@@ -101,3 +101,11 @@ public class NeoGame : Game
     protected virtual void OnUpdate(GameTime gameTime) { }
     protected virtual void OnDraw(SpriteBatch spriteBatch, GameTime gameTime) { }
 }
+
+// note to future self:
+// inherit from NeoGame<T> instead of NeoGame when you want a custom singleton with custom public fields you define in your base game class, i.e. public class Game1 : NeoGame<Game1> { }
+// this would make Game1.Singleton and show Game1's own public fields and etc.
+public class NeoGame<T> : NeoGame where T : NeoGame<T>
+{
+    public new static T Singleton => (T)NeoGame.Singleton;
+}

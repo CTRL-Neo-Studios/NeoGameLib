@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace NeoGameLib.Common;
@@ -19,4 +20,10 @@ public abstract class NeoBus<T>
     {
         Items.Remove(item);
     }
+
+    public int Count => Items.Count;
+
+    public bool Contains(T item) => Items.Contains(item);
+
+    public int RemoveAll(Predicate<T> match) => Items.RemoveAll(match);
 }

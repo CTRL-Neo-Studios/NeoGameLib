@@ -70,6 +70,15 @@ public class NeoMover : NeoComponent
         _fallVelocity = -JumpVelocity;
     }
 
+    /// <summary>
+    /// Adds a velocity kick.
+    /// </summary>
+    public void AddImpulse(Vector2 impulse)
+    {
+        _fallVelocity += impulse.Y;
+        if (Speed != 0) _currentDir.X += impulse.X / Speed;
+    }
+
     public override void OnUpdate(GameTime gameTime)
     {
         float dt = (float) gameTime.ElapsedGameTime.TotalSeconds;
