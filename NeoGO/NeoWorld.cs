@@ -112,6 +112,13 @@ public class NeoWorld
         return null;
     }
 
+    // returns false (and a null obj) when nothing matches
+    public bool TryFindObjectByHashCode(int hashCode, out NeoObject? obj)
+    {
+        obj = FindObjectByHashCode(hashCode);
+        return obj is not null;
+    }
+
     // note to self:
     // the query `T` type here refers to the Component type, not object type, so if you somehow forget this, PLS READ THIS COMMENT FROM MYSELF thank you
     // also this function returns the first object of component T's occurrence, for a list of objects, use the function below this one
@@ -125,6 +132,13 @@ public class NeoWorld
         return null;
     }
 
+    // returns false (and a null obj) when no object has the component
+    public bool TryFindObjectByComponent<T>(out NeoObject? obj) where T : NeoComponent
+    {
+        obj = FindObjectByComponent<T>();
+        return obj is not null;
+    }
+
     public List<NeoObject> FindObjectsByComponent<T>() where T : NeoComponent
     {
         List<NeoObject> list = new();
@@ -136,15 +150,31 @@ public class NeoWorld
         return list;
     }
 
-    // note to self:
-    // same queries as above but they hand back the COMPONENT directly, so no
-    // FindObjectByComponent<T>().GetComponent<T>() compounding
+    // returns false (and an empty list) when no object has the component
+    public bool TryFindObjectsByComponent<T>(out List<NeoObject> objects) where T : NeoComponent
+    {
+        objects = FindObjectsByComponent<T>();
+        return objects.Count > 0;
+    }
+
+    /// <summary>
+    /// A Shorthand for `FindObjectByComponent<T>().GetComponent<T>()`.
+    /// </summary>
+    /// <typeparam name="T">The component type you're querying for</typeparam>
+    /// <returns>The component. Ideally.</returns>
     public T FindComponent<T>() where T : NeoComponent
     {
         foreach (NeoObject obj in _objects)
             if (obj.TryGetComponent<T>(out T component)) return component;
 
         return null;
+    }
+
+    // returns false (and a null component) when nothing matches
+    public bool TryFindComponent<T>(out T? component) where T : NeoComponent
+    {
+        component = FindComponent<T>();
+        return component is not null;
     }
 
     public List<T> FindComponents<T>() where T : NeoComponent
@@ -154,6 +184,13 @@ public class NeoWorld
             if (obj.TryGetComponent<T>(out T component)) list.Add(component);
 
         return list;
+    }
+
+    // returns false (and an empty list) when nothing matches
+    public bool TryFindComponents<T>(out List<T> components) where T : NeoComponent
+    {
+        components = FindComponents<T>();
+        return components.Count > 0;
     }
     #endregion
 }
