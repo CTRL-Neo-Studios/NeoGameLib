@@ -96,6 +96,9 @@ public class WorldManager
         return _worlds.TryGetValue(name, out NeoWorld world) ? world : null;
     }
 
+    // shorthand for GetWorld
+    public NeoWorld this[string name] => GetWorld(name);
+
     public bool TryGetWorld(string name, out NeoWorld world)
     {
         return _worlds.TryGetValue(name, out world);

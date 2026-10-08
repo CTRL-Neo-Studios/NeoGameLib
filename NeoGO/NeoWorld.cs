@@ -29,10 +29,22 @@ public class NeoWorld
         this._objectDestroyQueue = new();
     }
 
+    // shorthand overloads, the docs-example ones: no transform = default placement
+    public NeoObject Instantiate(string name)
+    {
+        return Instantiate(name, new Transform());
+    }
+
+    public NeoObject Instantiate(string name, Vector2 position)
+    {
+        return Instantiate(name, new Transform(position));
+    }
+
     public NeoObject Instantiate(string name, Transform transform)
     {
         NeoObject obj = new(name, transform) { World = this };
         _objects.Add(obj);
+        obj.OnInstantiate();
         return obj;
     }
 
@@ -41,6 +53,7 @@ public class NeoWorld
         obj.World = this;
         obj.Transform = transform;
         _objects.Add(obj);
+        obj.OnInstantiate();
         return obj;
     }
 
@@ -49,6 +62,7 @@ public class NeoWorld
         obj.World = this;
         obj.Transform.Position = position;
         _objects.Add(obj);
+        obj.OnInstantiate();
         return obj;
     }
 
@@ -60,6 +74,7 @@ public class NeoWorld
     {
         obj.World = this;
         _objects.Add(obj);
+        obj.OnInstantiate();
         return obj;
     }
     
@@ -137,6 +152,25 @@ public class NeoWorld
     {
         obj = FindObjectByComponent<T>();
         return obj is not null;
+    }
+
+    // note to self:
+    // exact case-sensitive name match, first occurrence only
+    public NeoObject? FindObjectByName(string name)
+    {
+        foreach (NeoObject obj in _objects)
+            if (obj.Name == name) return obj;
+
+        return null;
+    }
+
+    public List<NeoObject> FindObjectsByName(string name)
+    {
+        List<NeoObject> list = new();
+        foreach (NeoObject obj in _objects)
+            if (obj.Name == name) list.Add(obj);
+
+        return list;
     }
 
     public List<NeoObject> FindObjectsByComponent<T>() where T : NeoComponent

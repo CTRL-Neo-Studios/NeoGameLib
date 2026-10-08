@@ -21,11 +21,11 @@ public class NeoInputMap
     // action name -> axis source
     private Dictionary<string, NeoAxisSource> _axes = new();
 
-    // per-frame results, filled by the bus' Refresh
+    // per-tick results, filled by the bus' Refresh
     private Dictionary<string, bool> _down = new(), _pressed = new(), _released = new();
     private Dictionary<string, float> _axisValues = new();
 
-    // any of the bound keys fires the action (OR, not AND)
+    // any of the bound keys invokes the action
     public void AddDigital(string action, params Keys[] keys)
     {
         _digitals[action] = new List<Keys>(keys);
@@ -34,6 +34,44 @@ public class NeoInputMap
     public void AddAxis(string action, NeoAxisRange range, Keys? positive = null, Keys? negative = null)
     {
         _axes[action] = new NeoAxisSource(range, positive, negative);
+    }
+
+    /// <summary>
+    /// Overrides an EXISTING action's bindings
+    /// </summary>
+    /// <param name="action">Target input action</param>
+    /// <param name="keys">Keys to bind to the overriding action</param>
+    /// <exception cref="KeyNotFoundException">throws when the action you're trying to modify doesn't exist</exception>
+    public void SetAction(string action, params Keys[] keys)
+    {
+        if (!_digitals.ContainsKey(action))
+            throw new KeyNotFoundException($"digital action '{action}' was never added");
+
+        _digitals[action] = new List<Keys>(keys);
+    }
+
+    public void SetAction(string action, NeoAxisRange range, Keys? positive = null, Keys? negative = null)
+    {
+        if (!_axes.ContainsKey(action))
+            throw new KeyNotFoundException($"axis action '{action}' was never added");
+
+        _axes[action] = new NeoAxisSource(range, positive, negative);
+    }
+
+    public bool HasAction(string action)
+    {
+        return _digitals.ContainsKey(action) || _axes.ContainsKey(action);
+    }
+
+    // deletes the action entirely
+    public void RemoveAction(string action)
+    {
+        _digitals.Remove(action);
+        _axes.Remove(action);
+        _down.Remove(action);
+        _pressed.Remove(action);
+        _released.Remove(action);
+        _axisValues.Remove(action);
     }
 
     // whether key was held in the current tick

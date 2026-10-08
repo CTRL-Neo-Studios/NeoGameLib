@@ -14,6 +14,7 @@ namespace NeoGameLib.NeoInput;
 public class NeoInputBus : NeoBus<NeoInputMap>
 {
     private KeyboardState _previous;
+    private KeyboardState _current;
 
     public void Update()
     {
@@ -22,10 +23,18 @@ public class NeoInputBus : NeoBus<NeoInputMap>
 
     public void Update(KeyboardState current)
     {
+        _current = current;
+
         for (int i = 0; i < Items.Count; i++)
             Items[i].Refresh(_previous, current); // refreshing all registered input maps
 
         _previous = current;
+    }
+
+    // returns the keys held in the current tick
+    public Keys[] ListenInput()
+    {
+        return _current.GetPressedKeys();
     }
 
     /// <summary>

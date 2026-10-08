@@ -121,6 +121,12 @@ public class NeoObject
     }
     #endregion
 
+    /// <summary>
+    /// This function is invoked when the world instantiates this object, right after World is assigned and the object is in the world's object list.
+    /// This is the place to add your components instead of in the constructor.
+    /// </summary>
+    public virtual void OnInstantiate() { }
+
     // note to future self: this marks the object to be destroyed in the next update end-tick but the components destroys immediately when calling this
     public void DestroyToQueue()
     {

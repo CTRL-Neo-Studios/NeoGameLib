@@ -1,4 +1,5 @@
-﻿using System;
+﻿﻿using System;
+using NeoGameLib.Common;
 using Microsoft.Xna.Framework;
 
 namespace NeoGameLib.NeoGO;
@@ -62,5 +63,42 @@ public class Transform
     }
 
     public Transform() : this(new Vector2(0)) {}
+
+    // raw move function without lerping
+    public void Move(Vector2 direction, GameTime gameTime)
+    {
+        _pos += direction * (float) gameTime.ElapsedGameTime.TotalSeconds;
+    }
+
+    // rotates this object so the given side points at the target. at a distance of zero it does nothing
+    public void FaceTowards(Direction2D side, Vector2 position)
+    {
+        Vector2 dir = position - _pos;
+        if (dir == Vector2.Zero) return;
+
+        _rot = MathF.Atan2(dir.Y, dir.X) - SideAngle(side);
+    }
+
+    public void FaceTowards(Direction2D side, Transform target)
+    {
+        FaceTowards(side, target.Position);
+    }
+
+    public void FaceTowards(Direction2D side, NeoObject target)
+    {
+        FaceTowards(side, target.Transform.Position);
+    }
+
+    private static float SideAngle(Direction2D side)
+    {
+        return side switch
+        {
+            Direction2D.Right => 0f,
+            Direction2D.Left => MathF.PI,
+            Direction2D.Up => -MathF.PI / 2f,
+            Direction2D.Down => MathF.PI / 2f,
+            _ => 0f
+        };
+    }
     
 }

@@ -1,4 +1,8 @@
-﻿using Microsoft.Xna.Framework;
+﻿using NeoGameLib.Common;
+using NeoGameLib.NeoCollision;
+using NeoGameLib.NeoInput;
+using NeoGameLib.NeoRendering;
+using Microsoft.Xna.Framework;
 
 namespace NeoGameLib.NeoGO;
 
@@ -26,6 +30,16 @@ public abstract class NeoComponent
     {
         get => _parentObj.World;
     }
+
+    // note to future self:
+    // manager shorthands so you don't have to use NeoGame.Singleton everytime in the components.
+    // do note that they're all null until the game initializes its buses, which happens BEFORE any OnLoadContent() or OnAwake (see NeoGame.Initialize)
+    public AssetManager Assets => NeoGame.Singleton?.Assets;
+    public WorldManager WorldManager => NeoGame.Singleton?.WorldManager;
+    public NeoRenderBus RenderBus => NeoGame.Singleton?.RenderBus;
+    public NeoColliderBus ColliderBus => NeoGame.Singleton?.ColliderBus;
+    public NeoTimerBus TimerBus => NeoGame.Singleton?.TimerBus;
+    public NeoInputBus InputBus => NeoGame.Singleton?.InputBus;
 
     public bool Enabled
     {
