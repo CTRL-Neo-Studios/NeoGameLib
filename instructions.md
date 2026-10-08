@@ -1,27 +1,3 @@
-[0.2.0] for worlds: registry of ALL worlds. Load pulls registered ones into the running set (any number at once, or none), Unload kicks one out and destroys its objects. objects are built on Load, not create
-
-Initially I was actually thinking of making the World Man.utility based instead of being a full-on registry-like-manager. But I was considering possible use cases such as worlds for UI-only and worlds for game objects only for better organization, and so I thought
-hey, how about just change to the registry-manager architecture instead? So, this architecture should be able to solve the object-layers problem which is just object on different layers but instead of layers it's now different worlds. This does affect things a bit,
-especially the collision where now collision is world-agnostic -- meaning that colliders in different worlds can collide with each other. This is a nuisance particularly for the use-case I've described, which means I have to change the collision bus architecture. See my updated note above for how collision works after the new world loading architecture.
-
-In addition to that, notice that I specify "registry-manager": this is not a full-save-state-registry manager in a traditional sense that saves the "snapshot" and "state" of a world; it's more like a registry-keeper manager that keeps in track of what worlds you load and that's that. Does not keep track of the worlds' states and created objects in its registry.
-For that to happen I'd actually need to write-load files and I'm NOT LOOKING TO MAKE A UNITY REPLICA. If I want Unity, I'd use unity, but this is MonoGame and fundamental architectures are different.
-
-Here's an example usage where a world only contains UI objects and another world contains only game-related objects.
-
-```csharp
-WorldManager.CreateWorld("ui", w => { /* build hud objects */ });
-WorldManager.CreateWorld("level1", w => { /* build game objects */ });
-WorldManager.Load("ui"); // builds using the registered builder function and starts running in the update tick loop
-WorldManager.Load("level1"); // same as above
-NeoObject hud = WorldManager.GetWorld("ui").FindObjectByComponent<HudManagerOrSmthLikeThat>(); // querying across worlds
-WorldManager.Unload("level1"); // destroys all objects in the world as a non-reversible action. the world is still in the registry and can be reloaded.
-WorldManager.Load("level1"); // rebuilt from the builder function. please make sure you did read my architecture notes above before using this, future self
-WorldManager.RenameWorld("ui", "hud"); // renames world "ui" to the new name "hud"
-```
-
----
-
 [0.1.x] for animation: Make a spritesheet and import it, and then do smth like this
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
@@ -79,6 +55,32 @@ protected override void OnLoadContent(ContentManager CM)
 ```
 
 texts draw after sprites
+
+---
+
+# Road to 0.2.0 - Worlds, Collisions, Input Gathering, Files, and Assets
+
+[0.2.0] for worlds: registry of ALL worlds. Load pulls registered ones into the running set (any number at once, or none), Unload kicks one out and destroys its objects. objects are built on Load, not create
+
+Initially I was actually thinking of making the World Man.utility based instead of being a full-on registry-like-manager. But I was considering possible use cases such as worlds for UI-only and worlds for game objects only for better organization, and so I thought
+hey, how about just change to the registry-manager architecture instead? So, this architecture should be able to solve the object-layers problem which is just object on different layers but instead of layers it's now different worlds. This does affect things a bit,
+especially the collision where now collision is world-agnostic -- meaning that colliders in different worlds can collide with each other. This is a nuisance particularly for the use-case I've described, which means I have to change the collision bus architecture. See my updated note above for how collision works after the new world loading architecture.
+
+In addition to that, notice that I specify "registry-manager": this is not a full-save-state-registry manager in a traditional sense that saves the "snapshot" and "state" of a world; it's more like a registry-keeper manager that keeps in track of what worlds you load and that's that. Does not keep track of the worlds' states and created objects in its registry.
+For that to happen I'd actually need to write-load files and I'm NOT LOOKING TO MAKE A UNITY REPLICA. If I want Unity, I'd use unity, but this is MonoGame and fundamental architectures are different.
+
+Here's an example usage where a world only contains UI objects and another world contains only game-related objects.
+
+```csharp
+WorldManager.CreateWorld("ui", w => { /* build hud objects */ });
+WorldManager.CreateWorld("level1", w => { /* build game objects */ });
+WorldManager.Load("ui"); // builds using the registered builder function and starts running in the update tick loop
+WorldManager.Load("level1"); // same as above
+NeoObject hud = WorldManager.GetWorld("ui").FindObjectByComponent<HudManagerOrSmthLikeThat>(); // querying across worlds
+WorldManager.Unload("level1"); // destroys all objects in the world as a non-reversible action. the world is still in the registry and can be reloaded.
+WorldManager.Load("level1"); // rebuilt from the builder function. please make sure you did read my architecture notes above before using this, future self
+WorldManager.RenameWorld("ui", "hud"); // renames world "ui" to the new name "hud"
+```
 
 ---
 
@@ -284,3 +286,21 @@ data.Load(); // lists every top-level file into file list buffer
 FileStore txt = data.Instantiate<FileStore>("config.txt");
 JsonStore json = data.Instantiate<JsonStore>("save.json");
 ```
+
+---
+
+# Road to 0.3.0 - Screen Space and World Space
+
+So, when I was thinking about the idea of the camera, I would think of the camera as a game object and use shader matrix operations to manipulate the render batch to simulate what the camera actually sees of the world.
+
+Except for one thing: UI.
+
+Currently all of my used implementations of UI components are as game objects that exist in the world. That means, when the camera moves, the UI moves as well, but it's not supposed to move.
+
+So two things:
+- Camera needs to render the worlds and UI separately, but the matrix manipulations must be on the world instead of on the UI.
+  - This means that previous ideas that UI and game objects are just two separate game object worlds is fucked.
+- I need UI to function, but also interop with the world as well. UI taps into both the rendering master lifecycle, but also the update master lifecycle since UI has their own separate logic as well.
+  - This would mean I have to create an additional system, like an additional bus for canvas rendering and logic handling instead of using existing world-related APIs.
+  - This would also mean that I have to make my own declarative UI syntax, which luckily I do have some experience in since I am a full-stack web developer + flutter user as well.
+
