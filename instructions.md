@@ -1,4 +1,6 @@
-[0.1.x] for animation: Make a spritesheet and import it, and then do smth like this
+# Changelogs, Instructions, and Rambling
+
+## [0.1.x] for animation: Make a spritesheet and import it, and then do smth like this
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
 protected override void OnLoadContent(ContentManager CM)
@@ -39,7 +41,7 @@ NeoAnimation vanish = NeoAnimation.FromGrid(new Point(4, 6), new Point(32, 32), 
 
 ---
 
-[0.1.x] for text: add a SpriteFont asset in the mgcb editor, then smth like this
+## [0.1.x] for text: add a SpriteFont asset in the mgcb editor, then smth like this
 
 ```csharp [AlsoInsideAClassInheritingNeoGameClass.cs]
 protected override void OnLoadContent(ContentManager CM)
@@ -56,11 +58,17 @@ protected override void OnLoadContent(ContentManager CM)
 
 texts draw after sprites
 
+## [0.1.x] Colliders
+
+two flavors, both register themselves on awake, collisions are computed automatically every frame after the world update
+
+
 ---
 
 # Road to 0.2.0 - Worlds, Collisions, Input Gathering, Files, and Assets
 
-[0.2.0] for worlds: registry of ALL worlds. Load pulls registered ones into the running set (any number at once, or none), Unload kicks one out and destroys its objects. objects are built on Load, not create
+## [0.2.0] Worlds
+registry of ALL worlds. Load pulls registered ones into the running set (any number at once, or none), Unload kicks one out and destroys its objects. objects are built on Load, not create
 
 Initially I was actually thinking of making the World Man.utility based instead of being a full-on registry-like-manager. But I was considering possible use cases such as worlds for UI-only and worlds for game objects only for better organization, and so I thought
 hey, how about just change to the registry-manager architecture instead? So, this architecture should be able to solve the object-layers problem which is just object on different layers but instead of layers it's now different worlds. This does affect things a bit,
@@ -84,7 +92,8 @@ WorldManager.RenameWorld("ui", "hud"); // renames world "ui" to the new name "hu
 
 ---
 
-[0.2.4] for inputs: an action map over the keyboard. you can map keys to named actions, query key states and axis values. input maps collects inputs as the first lifecycle in the update tick, so other update-tick lifecycles are able to read the latest input states and values.
+## [0.2.4] Input Action Maps
+an action map over the keyboard. you can map keys to named actions, query key states and axis values. input maps collects inputs as the first lifecycle in the update tick, so other update-tick lifecycles are able to read the latest input states and values.
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
 NeoInputMap gameplay = new();
@@ -113,19 +122,14 @@ gameplay.AddMouseButton("fire", MouseButtons.Left); // any bound button fires th
 `Input` is a shorthand facade over a hidden map registered to NeoGame.InputBus: `Input.LeftMouseButton.IsPressed()` / `IsDown()` / `IsReleased()`, plus Middle/Right/XButton1/XButton2 and `Input.MousePosition` in window pixels
 
 ---
+## **[0.2.0] !New in Collider Architecture!**
 
-[0.1.x] for colliders: two flavors, both register themselves on awake, collisions are computed automatically every frame after the world update
-
-**[0.2.0] !New in Collider Architecture!**
-
-1. Interface-based collider callbacks
-
+### Interface-based collider callbacks
 So, before this change, the right way of using a collider would be creating a new class that inherits the collider class used, adding that to the object, and then having it call other components' functions when a collision happens.
 Too much steps and too much inheritance, and so I'm making it interface-based: now you only have to add the collider component to the object, implement the Collision interface in other components in the same object, and the collider component will
 automatically call the interface functions on collision. Easier to setup, and makes it more easier to check which object has a collider as oyu can just now look for a collider component instead of looking for a component that had inherited the collider component.
 
-2. World-based collisions
-
+### World-based collisions
 since the introduction of World Man. and multiple-world-loading, object collisions are now cross-worlds, which means that objects in different worlds can collide with each other and so on -- which maybe is some cases is great if you want
 worlds to contain only one type of game objects and the other, but not particularly great in the use case described in the architecture note below where UI and game objects are in two different worlds. Not good. So I had to update the collider architecture and I've decided
 to make it somewhat "list-based": I could make a list of worlds in which object collisions are detected with one another, and worlds outside of that list don't share collision  
@@ -173,7 +177,8 @@ WorldManager.UngroupCollisions("ui"); // collides with everything in the ungroup
 
 ---
 
-[0.2.0] for movement: one movement logic component does keys, Move(), lerp, gravity, jump and ground detection. everything optional
+## [0.2.0] Built-in Movement Handler Boilerplate
+one movement logic component does keys, Move(), lerp, gravity, jump and ground detection. everything optional
 
 note to future self: you're welcome in advance. i find myself having to write the same movement code in two projects so might as well write a general purpose component that moves sprites instead.
 
@@ -187,7 +192,8 @@ mover.GroundComponentType = typeof(GroundTag); // needs a NeoBoxCollider on the 
 // mover.Gravity = 0 to fly, Omnidirectional = false for platformer-style, UseLerp/LerpSnappiness tune smoothing
 ```
 
-[0.2.3] colliders now stops the mover by default. when the mover overlaps a collider it is now "pushed" (moved in negative velocity) back out. also needs a NeoBoxCollider on the same object:
+## [0.2.3] NeoMover Colliders Whitelist/Blacklist
+colliders now stops the mover by default. when the mover overlaps a collider it is now "pushed" (moved in negative velocity) back out. also needs a NeoBoxCollider on the same object:
 
 ```csharp
 mover.CollisionWhitelist.Add(typeof(TriggerTag)); // objects with these components are pass-through (everything else solid)
@@ -201,7 +207,8 @@ Grounded property is still determined via GroundComponentType tags
 
 ---
 
-for timers: reusable individual countdown timers without the need to attach to specific objects. but it's ideally used in a component or an object.
+## [0.2.3] Timers
+reusable individual countdown timers without the need to attach to specific objects. but it's ideally used in a component or an object.
 
 ```csharp
 NeoTimer invuln = new(0.5f); // seconds
@@ -216,7 +223,8 @@ spawnTimer.OnFinished = () => spawnTimer.Start();
 
 ---
 
-for assets: cached loads and uses the path as key
+## [0.2.3] Asset Manager
+cached loads and uses the path as key
 
 ```csharp
 Texture2D bot = Assets.Load<Texture2D>("Sprites/bot"); // cache and load and quick reference/loading
@@ -226,7 +234,7 @@ Assets.UnloadAll();
 
 ---
 
-[0.2.3] file-system i/o: File as an object, Folder as an object
+## [0.2.3] file-system i/o: File as an object, Folder as an object
 
 This is mostly inspired by Tauri V2's Store class. Essentially, Tauri provides the Store class that provides load/write/other-object-manipulation functions that represents one .json file.
 
@@ -294,6 +302,14 @@ data.Load(); // lists every top-level file into file list buffer
 FileStore txt = data.Instantiate<FileStore>("config.txt");
 JsonStore json = data.Instantiate<JsonStore>("save.json");
 ```
+
+## [0.2.5] Quality of Life Improvements
+
+`ParentObject.World` -> `ParentWorld`
+
+`Game.Singleton.RenderBus` -> `RenderBus`, etc., as shorthands in the NeoComponent class
+
+and other stuff i forgot to record here
 
 ---
 
@@ -370,7 +386,8 @@ screen = p + center;
 
 ---
 
-[0.3.0] for cameras: a world-space camera component. attach one to an object, select it explicitly, and the whole world pass renders through it. UI does not interact with the view mat
+## [0.3.0] World-Space Camera
+a world-space camera component. attach one to an object, select it explicitly, and the whole world pass renders through it. UI does not interact with the view mat
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
 NeoObject camObj = World.Instantiate("cam", new Transform(new Vector2(0, 0)));
@@ -385,7 +402,9 @@ cam.CullingMask = -1; // bitmask of sprite/text Layers this camera draws, defaul
 Vector2 onScreen = RenderBus.WorldToScreen(new Vector2(100, 50));
 ```
 
-[0.3.0] for ui: screen-space canvases, drawn AFTER the world with an identity matrix so they ignore the camera entirely. screen-space contains UI elements using pixel sizes and normalized anchors/pivots.
+## [0.3.0] Screen-Space UI
+screen-space canvases, drawn AFTER the world with an identity matrix so they ignore the camera entirely. screen-space contains UI elements using pixel sizes and normalized anchors/pivots.
+
 // TODO: Implement relative-to-screen-resolution sizing later
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
@@ -412,4 +431,75 @@ panel.Children.Add(play);
 ```
 
 for implementing custom elements: you should subclass NeoUIElement and override OnUpdate() and OnDraw() functions. OnDrawUI() on your game draws AFTER all canvases and screen-space
+
+---
+
+## [0.3.1] Negative rendering scales for UI & Sprites
+
+Negative `Transform.Scale` now mirrors an object around its position. `Scale = new(-1, 1)` faces a right-facing sprite left; `(1, -1)` flips it upside down.
+
+Before 0.3.1, a negative scale value on any axis would make the sprite vanish, and `NeoSpriteCollider` stops running collision logic of it as well:
+- rendering: SpriteBatch builds the sprite rendering quad from `size * scale`, so a negative scale flips the quad's winding and the default `RasterizerState.CullCounterClockwise` culls it. Making both of the axes negative would make the thing flip the winding twice, which is why `(-1, -1)` still works somehow.
+- bounds: `NeoSpriteRenderer.Bounds` came out with a negative width/height, and the logic for handling that is that "a negative rectangle never intersects anything".
+
+The fix:
+- the render bus makes the scale absolute and converts the negative/positive meaning to `SpriteEffects.FlipHorizontally` / `FlipVertically` instead. SpriteEffects only mirrors the pixels inside the same box and that the sprite origin mirrors (`size - origin`) to put the box on the other side of the position as well. both the sprites and texts go through the same render process with this sprite effect.
+- `NeoSpriteRenderer.Bounds` now maintains an absolute positive rectangle by deriving it from the min/max of the two transformed frame corners. `NeoBoxCollider` uses this absolute scale values for size.
+
+```csharp
+// make sprite face cursor example
+Vector2 scale = Transform.Scale;
+scale.X = cursorX > Transform.Position.X ? MathF.Abs(scale.X) : -MathF.Abs(scale.X);
+Transform.Scale = scale;
+```
+
+---
+
+## [0.3.1] Window Sizing
+you can now control window modes, i.e. Windowed, Fullscreen, BorderlessFullscreen
+
+```csharp
+NeoGame.Singleton.SetWindowMode(NeoWindowMode.Windowed);             // bordered window, restores the last windowed size
+NeoGame.Singleton.SetWindowMode(NeoWindowMode.Fullscreen);           // exclusive fullscreen, the display changes mode
+NeoGame.Singleton.SetWindowMode(NeoWindowMode.BorderlessFullscreen); // borderless window that covers the display, no mode change
+NeoWindowMode current = NeoGame.Singleton.WindowMode;
+```
+
+call SetWindowMode after the game initializes.
+
+macOS has no borderless fullscreen, so BorderlessFullscreen becomes Fullscreen there, and WindowMode reports Fullscreen.
+
+---
+
+## [0.3.1] Render Features
+
+NeoSpriteRenderFeature is a NeoComponent that requires a base NeoSpriteRenderer to work. this mainly emerged as a need for me to make a sprite glow with an emissive outline when my mouse is hovered over it, but I don't want to make another set of spritesheet that has all the sprites have a drawn outline.
+
+So, NeoSpriteRenderFeature is born, and should attach to the render bus by default.
+
+a render feature draws extra layers in the same pass as its sprite in this order: OnDrawBehind -> Sprite -> OnDrawFront, with the camera culling, the camera matrix, negative-value flips and animation frames all apply on top of the feature.
+
+Note: You should attach it to a NeoObject **AFTER** you've attached the NeoSpriteRenderer to the object.
+
+```csharp
+public class MyFeature : NeoSpriteRenderFeature
+{
+    public override void OnDrawBehind(SpriteBatch spriteBatch, in NeoSpriteDrawInfo info)
+    {
+        info.Draw(spriteBatch, someTexture, Color.Black, new Vector2(4, 4)); // e.g. a drop shadow
+    }
+} // thank you minecraft for being an inspiration of many things, including this library, you were great and I enjoyed modding more than ever
+```
+
+### Examples
+
+`NeoOutlineFeature` is a built-in render feature for glowing sprite outlines: it draws a silhouette of the sprite 8 times behind it and expands by Thickness attr.
+
+```csharp
+crystal.AddComponent(new NeoSpriteRenderer(RenderBus, sheet));
+NeoOutlineFeature outline = crystal.AddComponent(new NeoOutlineFeature { Color = Color.Gold, Thickness = 2f });
+
+// in a component's OnUpdate: glow only while hovered
+outline.Enabled = renderer.IsCursorOnSprite();
+```
 

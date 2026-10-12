@@ -1,9 +1,9 @@
 using System;
-using NeoGameLib.NeoInput;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using NeoGameLib.NeoInput;
 
-namespace NeoGameLib.NeoUI;
+namespace NeoGameLib.NeoUI.Elements;
 
 /// <summary>
 /// A clickable text element. Reads pointer state from NeoInput.Input, so it needs a running game.

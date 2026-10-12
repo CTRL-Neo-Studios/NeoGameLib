@@ -1,7 +1,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace NeoGameLib.NeoUI;
+namespace NeoGameLib.NeoUI.Elements;
 
 public class NeoPanel : NeoUIElement
 {

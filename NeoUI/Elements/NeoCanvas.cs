@@ -1,4 +1,4 @@
-namespace NeoGameLib.NeoUI;
+namespace NeoGameLib.NeoUI.Elements;
 
 /// <summary>
 /// A standalone viewport root. Layout ignores inherited Position, Size, Anchor and Pivot properties and always fills the viewport from (0, 0)

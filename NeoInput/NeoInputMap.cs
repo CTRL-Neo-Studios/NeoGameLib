@@ -31,17 +31,35 @@ public class NeoInputMap
     public void AddDigital(string action, params Keys[] keys)
     {
         _digitals[action] = new List<Keys>(keys);
+        Seed(action);
     }
 
     // any of the bound mouse buttons invokes the action, combines with AddDigital keys on the same action
     public void AddMouseButton(string action, params MouseButtons[] buttons)
     {
         _mouseButtons[action] = new List<MouseButtons>(buttons);
+        Seed(action);
     }
 
     public void AddAxis(string action, NeoAxisRange range, Keys? positive = null, Keys? negative = null)
     {
         _axes[action] = new NeoAxisSource(range, positive, negative);
+        Seed(action);
+    }
+    
+    /// <summary>
+    /// Per-tick seeding to prevent querying non-existent shit mid-tick.
+    /// </summary>
+    /// <remarks>
+    /// The input bus only refreshes input maps at the start of a tick, which means that if a map was created mid-tick or post-tick-start and that it was queried,
+    /// null error would occur. So the seed function tries to prevent that by seeding whatever the fuck action user was querying prematurely without throwing a null index exception.
+    /// </remarks>
+    private void Seed(string action)
+    {
+        _down[action] = false;
+        _pressed[action] = false;
+        _released[action] = false;
+        _axisValues[action] = 0f;
     }
 
     /// <summary>

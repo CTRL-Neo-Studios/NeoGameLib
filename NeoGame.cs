@@ -29,6 +29,7 @@ public class NeoGame : Game
     private NeoUIBus _uiBus;
     private WorldManager _worldManager;
     private AssetManager _assetManager;
+    private Point _windowedSize;
 
     public static NeoGame? Singleton { get; private set; }
 
@@ -126,6 +127,55 @@ public class NeoGame : Game
     public Vector2 GetScreenCenterCoords()
     {
         return new Vector2(GraphicsDevice.Viewport.Width / 2f, GraphicsDevice.Viewport.Height / 2f);
+    }
+
+    /// <summary>The mode from the last SetWindowMode call. The game starts in Windowed by default.</summary>
+    public NeoWindowMode WindowMode { get; private set; } = NeoWindowMode.Windowed;
+
+    /// <summary>
+    /// Sets the game window mode. Use it AFTER the game initializes.
+    /// </summary>
+    /// <remarks>
+    /// <para>macOS has no borderless fullscreen, so BorderlessFullscreen becomes Fullscreen. WindowMode fetches to Fullscreen on mac as well.</para>
+    /// </remarks>
+    public void SetWindowMode(NeoWindowMode mode)
+    {
+        if (mode == NeoWindowMode.BorderlessFullscreen && System.OperatingSystem.IsMacOS())
+            mode = NeoWindowMode.Fullscreen;
+
+        if (mode == WindowMode) return;
+
+        // keep the windowed size so Windowed can restore it
+        if (WindowMode == NeoWindowMode.Windowed)
+            _windowedSize = Window.ClientBounds.Size;
+
+        DisplayMode display = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode;
+
+        switch (mode)
+        {
+            case NeoWindowMode.Windowed:
+                _gdm.IsFullScreen = false;
+                Window.IsBorderless = false;
+                if (_windowedSize != Point.Zero)
+                {
+                    _gdm.PreferredBackBufferWidth = _windowedSize.X;
+                    _gdm.PreferredBackBufferHeight = _windowedSize.Y;
+                }
+                _gdm.ApplyChanges();
+                break;
+
+            case NeoWindowMode.Fullscreen:
+            case NeoWindowMode.BorderlessFullscreen:
+                // HardwareModeSwitch true = exclusive mode change, false = borderless desktop fullscreen
+                _gdm.HardwareModeSwitch = mode == NeoWindowMode.Fullscreen;
+                _gdm.PreferredBackBufferWidth = display.Width;
+                _gdm.PreferredBackBufferHeight = display.Height;
+                _gdm.IsFullScreen = true;
+                _gdm.ApplyChanges();
+                break;
+        }
+
+        WindowMode = mode;
     }
 
     protected override void UnloadContent()
