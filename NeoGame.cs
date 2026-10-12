@@ -80,6 +80,7 @@ public class NeoGame : Game
     protected sealed override void Update(GameTime gameTime)
     {
         base.Update(gameTime);
+        Input.EnsureRegistered(); // input maps must exist before the bus refreshes in order for the buttons to get the state of the same frame
         InputBus.Update(); // input lifecycle runs first so everything collected will be accessible by lifecycles below
         UIBus.Update(gameTime, new Point(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height)); // ui runs before gameplay so screen-space logic reads the latest input and layout
         OnUpdate(gameTime);
@@ -92,8 +93,7 @@ public class NeoGame : Game
     {
         GraphicsDevice.Clear(Color.CornflowerBlue);
 
-        // world pass: one batch per enabled camera, stacked in Order. with no
-        // enabled camera the pass falls back to identity, the pre-camera behavior
+        // world pass: one batch per enabled camera, stacked in Order. with no enabled camera the pass falls back to identity, the pre-camera behavior
         if (RenderBus.HasAnyCamera)
         {
             foreach (NeoCamera camera in RenderBus.Cameras)

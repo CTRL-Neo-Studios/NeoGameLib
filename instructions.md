@@ -104,6 +104,14 @@ gameplay.GetAxis("moveX");
 
 trying to query an action that wasn't mapped in the input map throws an exception. that includes typos. (You're welcome, future me)
 
+mouse buttons bind like keys, and combine with keys on the same action:
+
+```csharp
+gameplay.AddMouseButton("fire", MouseButtons.Left); // any bound button fires the action
+```
+
+`Input` is a shorthand facade over a hidden map registered to NeoGame.InputBus: `Input.LeftMouseButton.IsPressed()` / `IsDown()` / `IsReleased()`, plus Middle/Right/XButton1/XButton2 and `Input.MousePosition` in window pixels
+
 ---
 
 [0.1.x] for colliders: two flavors, both register themselves on awake, collisions are computed automatically every frame after the world update
@@ -393,6 +401,14 @@ canvas.Children.Add(panel);
 UIBus.Add(canvas); // NeoGame.UIBus updates before gameplay and draws its contents after the world
 
 // top-left = parent top-left + parent size * Anchor + Position - own size * Pivot.
+```
+
+buttons are clickable labels that read the Input facade, OnClick fires on left-button release inside their bounds:
+
+```csharp
+NeoButton play = new() { Text = "Play", Font = font, Size = new Vector2(160, 40), Anchor = Vector2.Zero };
+play.OnClick = () => { /* start game */ };
+panel.Children.Add(play);
 ```
 
 for implementing custom elements: you should subclass NeoUIElement and override OnUpdate() and OnDraw() functions. OnDrawUI() on your game draws AFTER all canvases and screen-space
