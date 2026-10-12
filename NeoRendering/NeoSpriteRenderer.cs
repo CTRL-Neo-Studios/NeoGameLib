@@ -1,4 +1,5 @@
-﻿using NeoGameLib.Common;
+﻿using System;
+using NeoGameLib.Common;
 using NeoGameLib.NeoGO;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -49,6 +50,22 @@ public class NeoSpriteRenderer : NeoComponent
         get => _order;
         set => _order = value;
     }
+
+    /// <summary>
+    /// this is a bitmask layer for camera culling.
+    /// </summary>
+    /// <remarks>
+    /// <para>So bits. we know bits, right? 1 = 0001, 2 = 0010, 4 = 0100, and so on.</para>
+    /// <para>This is basically a bitmask. So, cameras only renders this object when their masks share one bit.</para>
+    /// <para>For example: Camera 1 (<c>0000 0101</c> Renders default + Layer #2), Camera 2 (<c>0000 0001</c> Renders ONLY default)</para>
+    /// <para>Object A (<c>0000 0001</c> At Layer Default), Object B (<c>0000 0100</c> At Layer #2)</para>
+    /// <para>Get the idea yet? So, basically, when (Layer &amp; camera.cullingMask) != 0, which is when (camera 1)<c>0000 0101</c> is compared with (object A)<c>0000 0001</c> and that at least one bit overlaps, the object is rendered by the camera.</para>
+    /// </remarks>
+    /// <example>
+    /// <para>Setting the object's render layer as Layer #2 would be: <c>Layer = 1 &lt;&lt; 2;</c></para>
+    /// <para>To layers 3 and 7: <c>Layer = (1 &lt;&lt; 3) | (1 &lt;&lt; 7);</c></para>
+    /// </example>
+    public int Layer { get; set; } = 1;
     
     // note to self:
     // these are WORLD-space bounds. texture-local bounds are always (0,0,w,h) no matter what so all the window-edge checks below never fired for small sprites.
@@ -70,23 +87,66 @@ public class NeoSpriteRenderer : NeoComponent
         }
     }
 
+    /// <summary>
+    /// The screen-space box of this sprite, after the main camera projection.
+    /// </summary>
+    /// <remarks>
+    /// <para>This is used for viewport checks and camera-culling. Bounds stays in world space, and the rectangle bound is constructed via the four corners of the frame.</para>
+    /// </remarks>
+    public Rectangle ScreenBounds
+    {
+        get
+        {
+            if (_texture is null) return Rectangle.Empty;
+
+            Vector2 frameSize = (SourceRectangle?.Size ?? _texture.Bounds.Size).ToVector2();
+            if (frameSize.X <= 0f || frameSize.Y <= 0f) return Rectangle.Empty;
+
+            Transform t = ParentTransform;
+            if (t.Scale.X == 0f || t.Scale.Y == 0f) return Rectangle.Empty;
+
+            Vector2 c00 = LocalToScreen(Vector2.Zero);
+            Vector2 c10 = LocalToScreen(new Vector2(frameSize.X, 0f));
+            Vector2 c01 = LocalToScreen(new Vector2(0f, frameSize.Y));
+            Vector2 c11 = LocalToScreen(frameSize);
+
+            float minX = MathF.Min(MathF.Min(c00.X, c10.X), MathF.Min(c01.X, c11.X));
+            float maxX = MathF.Max(MathF.Max(c00.X, c10.X), MathF.Max(c01.X, c11.X));
+            float minY = MathF.Min(MathF.Min(c00.Y, c10.Y), MathF.Min(c01.Y, c11.Y));
+            float maxY = MathF.Max(MathF.Max(c00.Y, c10.Y), MathF.Max(c01.Y, c11.Y));
+
+            return new Rectangle((int)MathF.Floor(minX), (int)MathF.Floor(minY),
+                (int)MathF.Ceiling(maxX - minX), (int)MathF.Ceiling(maxY - minY));
+        }
+    }
+
+    /// <summary>
+    /// True when the full sprite is inside the viewport, in screen space. Follows the camera.
+    /// </summary>
     public bool WithinViewportBounds
     {
         get
         {
             Viewport viewport = _bus.Gdm.GraphicsDevice.Viewport;
-            return Bounds.Left >= 0 && Bounds.Right <= viewport.Width &&
-                   Bounds.Top >= 0 && Bounds.Bottom <= viewport.Height;
+            Rectangle bounds = ScreenBounds;
+            if (bounds.IsEmpty) return false;
+            return bounds.Left >= viewport.X && bounds.Right <= viewport.X + viewport.Width &&
+                   bounds.Top >= viewport.Y && bounds.Bottom <= viewport.Y + viewport.Height;
         }
     }
 
+    /// <summary>
+    /// True when any part of the sprite is inside the viewport, in screen space. Use this to skip drawing.
+    /// </summary>
     public bool VisibleInViewportBounds
     {
         get
         {
             Viewport viewport = _bus.Gdm.GraphicsDevice.Viewport;
-            return Bounds.Right >= 0 && Bounds.Left <= viewport.Width &&
-                   Bounds.Bottom >= 0 && Bounds.Top <= viewport.Height;
+            Rectangle bounds = ScreenBounds;
+            if (bounds.IsEmpty) return false;
+            return bounds.Right >= viewport.X && bounds.Left <= viewport.X + viewport.Width &&
+                   bounds.Bottom >= viewport.Y && bounds.Top <= viewport.Y + viewport.Height;
         }
     }
 
@@ -106,31 +166,78 @@ public class NeoSpriteRenderer : NeoComponent
         _bus.RemoveSprite(this);
     }
 
-    // note to self:
-    // detect whether one of the sprite's bound is out of the window, like the sprite edge going over the window edge
-    // e.g. when top edge is outside of the viewport and direction is set to top, returns true
+    /// <summary>
+    /// True when the given edge of the sprite is past the viewport edge, in screen space. Follows the camera.
+    /// </summary>
+    /// <remarks>
+    /// <para>Example: Direction2D.Up is true when the top edge is above the viewport top.</para>
+    /// </remarks>
     public virtual bool IsOverWindowBounds(Direction2D dir)
     {
+        Viewport viewport = _bus.Gdm.GraphicsDevice.Viewport;
+        Rectangle bounds = ScreenBounds;
+
         switch (dir)
         {
             case Direction2D.Left:
-                return Bounds.Left < 0;
+                return bounds.Left < viewport.X;
             case Direction2D.Right:
-                return Bounds.Right > _bus.Gdm.GraphicsDevice.Viewport.Width;
+                return bounds.Right > viewport.X + viewport.Width;
             case Direction2D.Down:
-                return Bounds.Bottom > _bus.Gdm.GraphicsDevice.Viewport.Height;
+                return bounds.Bottom > viewport.Y + viewport.Height;
             case Direction2D.Up:
-                return Bounds.Top < 0;
+                return bounds.Top < viewport.Y;
             default:
                 return false;
         }
     }
 
-    // note to self:
-    // true if the mouse cursor is over this sprite's world-space bounds.
-    // there's no camera system yet so window coords == world coords, but if a camera system is added, do change this to account for the camera transform.
+    /// <summary>
+    /// True when the given window-pixel point is inside the sprite's frame.
+    /// </summary>
+    /// <remarks>
+    /// <para>order of ops: converts the point to world space with the main camera, subtracts the sprite position, undoes the sprite rotation and scale, then adds the anchor offset, and then checks the result against the frame rectangle.</para>
+    /// </remarks>
+    public bool ContainsScreenPoint(Vector2 screenPoint)
+    {
+        if (_texture is null) return false;
+
+        Vector2 frameSize = (SourceRectangle?.Size ?? _texture.Bounds.Size).ToVector2();
+        if (frameSize.X <= 0f || frameSize.Y <= 0f) return false;
+
+        if (ParentTransform.Scale.X == 0f || ParentTransform.Scale.Y == 0f) return false;
+
+        Vector2 worldPos = _bus.ScreenToWorld(screenPoint);
+        Vector2 relativePos = worldPos - ParentTransform.Position;
+
+        float cos = MathF.Cos(-ParentTransform.Rotation);
+        float sin = MathF.Sin(-ParentTransform.Rotation);
+        Vector2 unrotated = new(relativePos.X * cos - relativePos.Y * sin, relativePos.X * sin + relativePos.Y * cos);
+        unrotated /= ParentTransform.Scale;
+
+        Vector2 local = unrotated + frameSize * _anchor;
+        return local.X >= 0f && local.Y >= 0f && local.X <= frameSize.X && local.Y <= frameSize.Y;
+    }
+
+    /// <summary>
+    /// True when the mouse cursor is inside the sprite's frame. Calls ContainsScreenPoint with the current mouse position.
+    /// </summary>
     public bool IsCursorOnSprite()
     {
-        return Bounds.Contains(Mouse.GetState().Position);
+        return ContainsScreenPoint(Mouse.GetState().Position.ToVector2());
+    }
+
+    // basically reverse ContainsScreenPoint
+    // frame point -> sprite transform -> world -> main camera -> screen.
+    private Vector2 LocalToScreen(Vector2 framePoint)
+    {
+        Vector2 frameSize = (SourceRectangle?.Size ?? _texture.Bounds.Size).ToVector2();
+        Vector2 rel = (framePoint - (frameSize * _anchor)) * ParentTransform.Scale;
+
+        float cos = MathF.Cos(ParentTransform.Rotation);
+        float sin = MathF.Sin(ParentTransform.Rotation);
+        Vector2 world = ParentTransform.Position + new Vector2(rel.X * cos - rel.Y * sin, rel.X * sin + rel.Y * cos);
+
+        return _bus.WorldToScreen(world);
     }
 }

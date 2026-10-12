@@ -3,6 +3,7 @@ using NeoGameLib.NeoCollision;
 using NeoGameLib.NeoGO;
 using NeoGameLib.NeoInput;
 using NeoGameLib.NeoRendering;
+using NeoGameLib.NeoUI;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
@@ -25,6 +26,7 @@ public class NeoGame : Game
     private NeoColliderBus _colliderBus;
     private NeoTimerBus _timerBus;
     private NeoInputBus _inputBus;
+    private NeoUIBus _uiBus;
     private WorldManager _worldManager;
     private AssetManager _assetManager;
 
@@ -35,8 +37,13 @@ public class NeoGame : Game
     public NeoColliderBus ColliderBus => _colliderBus;
     public NeoTimerBus TimerBus => _timerBus;
     public NeoInputBus InputBus => _inputBus;
+    public NeoUIBus UIBus => _uiBus;
     public WorldManager WorldManager => _worldManager;
     public AssetManager Assets => _assetManager;
+    /// <summary>
+    /// Shorthand for GraphicsDeviceManager.GraphicsDevice.Viewport.
+    /// </summary>
+    public Viewport GraphicsViewport => _gdm.GraphicsDevice.Viewport;
 
     public NeoGame()
     {
@@ -56,6 +63,7 @@ public class NeoGame : Game
         _colliderBus = new NeoColliderBus(_worldManager);
         _timerBus = new NeoTimerBus();
         _inputBus = new NeoInputBus();
+        _uiBus = new NeoUIBus();
         _assetManager = new AssetManager(Content);
 
         base.Initialize();
@@ -72,7 +80,9 @@ public class NeoGame : Game
     protected sealed override void Update(GameTime gameTime)
     {
         base.Update(gameTime);
+        Input.EnsureRegistered(); // input maps must exist before the bus refreshes in order for the buttons to get the state of the same frame
         InputBus.Update(); // input lifecycle runs first so everything collected will be accessible by lifecycles below
+        UIBus.Update(gameTime, new Point(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height)); // ui runs before gameplay so screen-space logic reads the latest input and layout
         OnUpdate(gameTime);
         WorldManager.Update(gameTime);
         ColliderBus.Update();
@@ -83,9 +93,31 @@ public class NeoGame : Game
     {
         GraphicsDevice.Clear(Color.CornflowerBlue);
 
+        // world pass: one batch per enabled camera, stacked in Order. with no enabled camera the pass falls back to identity, the pre-camera behavior
+        if (RenderBus.HasAnyCamera)
+        {
+            foreach (NeoCamera camera in RenderBus.Cameras)
+            {
+                if (!camera.Enabled) continue;
+
+                _spriteBatch.Begin(transformMatrix: camera.GetViewMatrix(GraphicsDevice.Viewport));
+                RenderBus.Draw(_spriteBatch, camera);
+                if (ReferenceEquals(camera, RenderBus.MainCamera)) OnDraw(_spriteBatch, gameTime);
+                _spriteBatch.End();
+            }
+        }
+        else
+        {
+            _spriteBatch.Begin();
+            RenderBus.Draw(_spriteBatch);
+            OnDraw(_spriteBatch, gameTime);
+            _spriteBatch.End();
+        }
+
+        // screen-space pass: identity matrix, always on top of the world
         _spriteBatch.Begin();
-        RenderBus.Draw(_spriteBatch);
-        OnDraw(_spriteBatch, gameTime);
+        UIBus.Draw(_spriteBatch);
+        OnDrawUI(_spriteBatch, gameTime);
         _spriteBatch.End();
 
         base.Draw(gameTime);
@@ -96,10 +128,22 @@ public class NeoGame : Game
         return new Vector2(GraphicsDevice.Viewport.Width / 2f, GraphicsDevice.Viewport.Height / 2f);
     }
 
+    protected override void UnloadContent()
+    {
+        _uiBus?.Dispose();
+        base.UnloadContent();
+    }
+
     protected virtual void OnInitialize() { }
     protected virtual void OnLoadContent(ContentManager CM) { }
     protected virtual void OnUpdate(GameTime gameTime) { }
     protected virtual void OnDraw(SpriteBatch spriteBatch, GameTime gameTime) { }
+
+    /// <summary>
+    /// this is the screen-space equivalent of OnDraw and it runs after all canvases with an identity matrix, so anything drawn here does not take the camera into account.
+    /// </summary>
+    /// <remarks>See instructions.md 0.3.0 Actual Implementation section beginning for more info.</remarks>
+    protected virtual void OnDrawUI(SpriteBatch spriteBatch, GameTime gameTime) { }
 }
 
 // note to future self:

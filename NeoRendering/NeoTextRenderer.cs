@@ -52,6 +52,11 @@ public class NeoTextRenderer : NeoComponent
         set => _order = value;
     }
 
+    /// <summary>
+    /// bitmask layer. See the NeoSpriteRenderer's Layer attribute comment for more info.
+    /// </summary>
+    public int Layer { get; set; } = 1;
+
     public NeoTextRenderer(NeoRenderBus bus, SpriteFont? font = null)
     {
         _bus = bus;

@@ -18,6 +18,8 @@ public class NeoInputMap
 {
     // action name -> bound keys
     private Dictionary<string, List<Keys>> _digitals = new();
+    // action name -> bound mouse buttons, an action may appear in both dicts and combines
+    private Dictionary<string, List<MouseButtons>> _mouseButtons = new();
     // action name -> axis source
     private Dictionary<string, NeoAxisSource> _axes = new();
 
@@ -29,6 +31,12 @@ public class NeoInputMap
     public void AddDigital(string action, params Keys[] keys)
     {
         _digitals[action] = new List<Keys>(keys);
+    }
+
+    // any of the bound mouse buttons invokes the action, combines with AddDigital keys on the same action
+    public void AddMouseButton(string action, params MouseButtons[] buttons)
+    {
+        _mouseButtons[action] = new List<MouseButtons>(buttons);
     }
 
     public void AddAxis(string action, NeoAxisRange range, Keys? positive = null, Keys? negative = null)
@@ -60,13 +68,14 @@ public class NeoInputMap
 
     public bool HasAction(string action)
     {
-        return _digitals.ContainsKey(action) || _axes.ContainsKey(action);
+        return _digitals.ContainsKey(action) || _axes.ContainsKey(action) || _mouseButtons.ContainsKey(action);
     }
 
     // deletes the action entirely
     public void RemoveAction(string action)
     {
         _digitals.Remove(action);
+        _mouseButtons.Remove(action);
         _axes.Remove(action);
         _down.Remove(action);
         _pressed.Remove(action);
@@ -118,7 +127,7 @@ public class NeoInputMap
     }
 
     // the bus calls this every frame with its prev/current snapshots, don't touch
-    internal void Refresh(KeyboardState previous, KeyboardState current)
+    internal void Refresh(KeyboardState previous, KeyboardState current, MouseState previousMouse, MouseState currentMouse)
     {
         foreach (KeyValuePair<string, List<Keys>> entry in _digitals)
         {
@@ -138,6 +147,32 @@ public class NeoInputMap
         }
 
         
+        // actions bound to mouse buttons recompute alongside with their keys
+        foreach (KeyValuePair<string, List<MouseButtons>> entry in _mouseButtons)
+        {
+            bool wasDown = false;
+            bool isDown = false;
+
+            if (_digitals.TryGetValue(entry.Key, out List<Keys> keys))
+            {
+                foreach (Keys key in keys)
+                {
+                    if (previous.IsKeyDown(key)) wasDown = true;
+                    if (current.IsKeyDown(key)) isDown = true;
+                }
+            }
+
+            foreach (MouseButtons button in entry.Value)
+            {
+                if (IsDown(previousMouse, button)) wasDown = true;
+                if (IsDown(currentMouse, button)) isDown = true;
+            }
+
+            _down[entry.Key] = isDown;
+            _pressed[entry.Key] = isDown && !wasDown;
+            _released[entry.Key] = !isDown && wasDown;
+        }
+
         foreach (KeyValuePair<string, NeoAxisSource> entry in _axes)
         {
             NeoAxisSource source = entry.Value;
@@ -157,6 +192,19 @@ public class NeoInputMap
                 _ => -raw,
             };
         }
+    }
+
+    private static bool IsDown(MouseState state, MouseButtons button)
+    {
+        return button switch
+        {
+            MouseButtons.Left => state.LeftButton == ButtonState.Pressed,
+            MouseButtons.Middle => state.MiddleButton == ButtonState.Pressed,
+            MouseButtons.Right => state.RightButton == ButtonState.Pressed,
+            MouseButtons.XButton1 => state.XButton1 == ButtonState.Pressed,
+            MouseButtons.XButton2 => state.XButton2 == ButtonState.Pressed,
+            _ => false
+        };
     }
 
     private struct NeoAxisSource
