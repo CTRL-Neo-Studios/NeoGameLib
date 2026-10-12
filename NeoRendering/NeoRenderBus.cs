@@ -98,7 +98,7 @@ public class NeoRenderBus
     {
         if (_cameras.Contains(camera)) return;
 
-        camera.RegistrationOrder = _cameraRegistrationCounter++;
+        camera.RegOrder = _cameraRegistrationCounter++;
         _cameras.Add(camera);
         _cameraOrderDirty = true;
     }
@@ -118,7 +118,7 @@ public class NeoRenderBus
         _cameras.Sort(static (a, b) =>
         {
             int tmp = a.Order.CompareTo(b.Order);
-            return tmp != 0 ? tmp : a.RegistrationOrder.CompareTo(b.RegistrationOrder);
+            return tmp != 0 ? tmp : a.RegOrder.CompareTo(b.RegOrder);
         });
     }
 

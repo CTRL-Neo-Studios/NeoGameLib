@@ -291,6 +291,11 @@ JsonStore json = data.Instantiate<JsonStore>("save.json");
 
 # Road to 0.3.0 - Screen Space and World Space
 
+> Funnily enough, this took a night to plan but took an actual day and a half for me to research on whatever the fuck I've planned and how to implement them.
+> Fuck me...
+> 
+> You're welcome as always, future me
+
 So, when I was thinking about the idea of the camera, I would think of the camera as a game object and use shader matrix operations to manipulate the render batch to simulate what the camera actually sees of the world.
 
 Except for one thing: UI.
@@ -303,4 +308,93 @@ So two things:
 - I need UI to function, but also interop with the world as well. UI taps into both the rendering master lifecycle, but also the update master lifecycle since UI has their own separate logic as well.
   - This would mean I have to create an additional system, like an additional bus for canvas rendering and logic handling instead of using existing world-related APIs.
   - This would also mean that I have to make my own declarative UI syntax, which luckily I do have some experience in since I am a full-stack web developer + flutter user as well.
+
+## Actual Implementation
+
+Well we all know that plannings and thoughts are different from what's actually done during the engineering and implementation phase.
+
+World-space and screen-space means separating the old one-rendering-pass into two.
+1. The world-space pass: world-space pass renders the worlds to the viewport under the influence of the camera's transform. The resulting render patch would have its transform matrix modified according to the camera transform.
+   - The transform coordinate system remains the same. x+ is viewport right, x- is viewport left, y+ is viewport down, y- is viewport up.
+   - Multiple cameras rendering to viewport. Similar to the neo-sprite rendering order, cameras have rendering orders as well, and they all render to the same viewport overlaying on top of each other. This leaves space for layered UI rendering or layered-world-space rendering of cameras, where one camera could render sprites, other renders special effects, or have multiple cameras displaced and color-graded on the output to create crazy schizophrenic effects.
+   - No cameras rendering to viewport. This should fallback to the original rendering, where (0,0) is just viewport's top-left corner.
+2. The screen-space pass: screen-space pass renders the UI stuff. It uses viewport coords, which does not have relations to world coords in any way.
+   - Before 0.3.0, transform was bound to viewport coords. Now, only UI stuff are bound to viewport coords in the screen-space, and transform represents coordinates in the world-space instead. It's not bound by viewport-space anymore.
+   - Yes, multiple cameras exist, but ideally, screen-space is one pass, so no matter how many cameras there are, there should be only one UI pass. A camera ONLY renders world-space with a certain offset. The UI is added after the world-space pass rendering.
+
+### Cameras
+Cameras should be a separate component attached to game objects to indicate that they're cameras. And on attach/create, the NeoCamera's OnAwake() call registers itself to the render bus. Detroying the component unregisters itself. (And, yes I know this means that cameras can be registered outside the normal world-object-component registration flow)
+- Cameras use the Render Bus, same as the render bus for sprite rendering. So, this means that cameras also has the Order attribute and should render from lowest-to-highest order as well.
+- They also have a Zoom parameter that controls, well, its zoom.
+
+#### Actual Rendering
+
+In order for cameras to render out the world, we need matrices. Cameras, specifically, has something called a "View Matrix."
+
+A View Matrix is basically a 4x4 math matrix that transforms vertex coords from world-space into camera-space. This is the google definition, but my interpretation is, **basically it describes everything in the world relative to the camera.**
+
+There is, or there should, be 4 steps into building the view matrix:
+1. translate object positions in the world relative to the camera.
+   - camera moves right, world moves left
+   - i.e. an object at (100, 50) and a camera at (130, 50); the object is at (-30, 0) relative to the camera since object - camera = (100,50) - (130,50) = (-30,0).
+2. translate object rotations in the world relative to the camera.
+   - camera rotates clockwise, world rotates counterclockwise
+   - i.e. an object that is at 60 deg rot and camera at 30 deg rot clockwise. To the camera, the object is rotated 30-deg clockwise.
+3. scale the world by the camera's zoom.
+   - camera zooms in, world scales up
+   - i.e. an object at (2,2) scale viewed through a 1.5x zoom camera appears (3,3): object scale x camera zoom = 2 x 1.5. note the object's own scale stays on the object; the view matrix only carries the zoom.
+4. makes sure the camera's "position" is landed at the viewport center.
+   - imagine everything above describes the objects, but renders it at the (0,0) position of the viewport, which is the top-left corner of your window. So this step adds half of the viewport's height & width and makes it that everything described above is at the center of the viewport.
+   - i.e. a 800x600 window. this would add (400, 300) to the final matrix that recenters everything described above back to the center.
+
+So basically, everything comes down to this equation:
+```
+screen = Transform(center) x Scale(zoom) x Rotate(-cameraRot) x Transform(-cameraPos) applied to world coordinates
+```
+
+```
+d = world - cameraPos;
+d' = rotate d by -cameraRot;
+p = d' x zoom;
+screen = p + center;
+```
+
+
+
+---
+
+[0.3.0] for cameras: a world-space camera component. attach one to an object, select it explicitly, and the whole world pass renders through it. UI never sees this matrix
+
+```csharp [InsideAClassInheritingNeoGameClass.cs]
+NeoObject camObj = World.Instantiate("cam", new Transform(new Vector2(0, 0)));
+NeoCamera cam = camObj.AddComponent(new NeoCamera(RenderBus)); // self-registers on awake
+cam.Zoom = 2f;
+cam.CullingMask = -1; // bitmask of sprite/text Layers this camera draws, default = everything
+
+// every ENABLED camera renders the world stacked in Order (ties = registration order).
+// cameras unregister themselves on destroy, so loading/unloading a world moves its cameras.
+// MainCamera (first enabled) drives WorldToScreen/ScreenToWorld and the OnDraw hook.
+// no enabled camera at all -> the world pass falls back to identity, the pre-camera behavior
+Vector2 onScreen = RenderBus.WorldToScreen(new Vector2(100, 50));
+```
+
+[0.3.0] for ui: screen-space canvases, drawn after the world with an identity matrix so they ignore the camera entirely. retained elements with pixel sizes and normalized anchors/pivots
+
+```csharp [InsideAClassInheritingNeoGameClass.cs]
+NeoCanvas canvas = new();
+NeoPanel panel = new()
+{
+    Position = new Vector2(10, 10), Size = new Vector2(200, 100),
+    Anchor = Vector2.Zero, Pivot = Vector2.Zero, Color = Color.Gray
+};
+NeoLabel label = new() { Text = "HP 100", Color = Color.White }; // Font is borrowed, never disposed by the UI
+panel.Children.Add(label);
+canvas.Children.Add(panel);
+UIBus.Add(canvas); // NeoGame.UIBus, updated before gameplay, drawn after the world
+
+// top-left = parent top-left + parent size * Anchor + Position - own size * Pivot.
+// children nest and paint parent-first. Enabled kills subtree updates, Visible kills subtree draws
+```
+
+custom elements subclass NeoUIElement and override OnUpdate(GameTime) + OnDraw(SpriteBatch). OnDrawUI(SpriteBatch, GameTime) on your game draws after all canvases, also screen-space
 
