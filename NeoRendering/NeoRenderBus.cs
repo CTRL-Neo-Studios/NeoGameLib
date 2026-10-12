@@ -22,8 +22,6 @@ public class NeoRenderBus
     private long _cameraRegistrationCounter = 0;
     private bool _cameraOrderDirty;
 
-    private SpriteEffects placeholderEffect; // TODO: FIgure out what this does and properly propogate this to all sprite renderer components
-
     internal GraphicsDeviceManager Gdm
     {
         get => _gdm;
@@ -127,8 +125,6 @@ public class NeoRenderBus
         this._gdm = graphicsDeviceManager;
         this._sprites = new();
         this._orderCounter = 0;
-
-        this.placeholderEffect = new SpriteEffects();
     }
 
     public void AddSprite(NeoSpriteRenderer sprite)
@@ -200,8 +196,25 @@ public class NeoRenderBus
 
             Transform transform = sp.ParentTransform;
             Vector2 frameSize = (sp.SourceRectangle?.Size ?? sp.Texture.Bounds.Size).ToVector2(); // if source rect is present then use source rect for frame size instead of the sprite texture, because source rect is not null when sprite is animated
-            Vector2 origin = frameSize * sp.Anchor;
-            spriteBatch.Draw(sp.Texture, transform.Position, sp.SourceRectangle, sp.Color, transform.Rotation, origin, transform.Scale, placeholderEffect, sp.Depth);
+            Vector2 origin = frameSize * sp.Anchor, scale = transform.Scale;
+            SpriteEffects effects = ResolveFlip(frameSize, ref origin, ref scale);
+            NeoSpriteDrawInfo info = new(sp.Texture, sp.SourceRectangle, transform.Position, sp.Color, transform.Rotation, origin, scale, effects, sp.Depth);
+            List<NeoSpriteRenderFeature> features = sp.Features;
+
+            // features draw in submission order: behind layers, the sprite, then front layers
+            for (int i = 0; i < features.Count; i++)
+            {
+                if (features[i].Enabled) 
+                    features[i].OnDrawBehind(spriteBatch, info);
+            }
+
+            info.Draw(spriteBatch, sp.Texture, sp.Color);
+
+            for (int i = 0; i < features.Count; i++)
+            {
+                if (features[i].Enabled) 
+                    features[i].OnDrawFront(spriteBatch, info);
+            }
         }
     }
 
@@ -222,8 +235,37 @@ public class NeoRenderBus
             if (mask.HasValue && (text.Layer & mask.Value) == 0) continue;
 
             Transform transform = text.ParentTransform;
-            Vector2 origin = text.Font.MeasureString(text.Text) * text.Anchor;
-            spriteBatch.DrawString(text.Font, text.Text, transform.Position, text.Color, transform.Rotation, origin, transform.Scale, SpriteEffects.None, text.Depth);
+            Vector2 size = text.Font.MeasureString(text.Text),
+                origin = size * text.Anchor,
+                scale = transform.Scale;
+            SpriteEffects effects = ResolveFlip(size, ref origin, ref scale);
+            spriteBatch.DrawString(text.Font, text.Text, transform.Position, text.Color, transform.Rotation, origin, scale, effects, text.Depth);
         }
+    }
+
+    /// <summary>
+    /// <para>SpriteBatch builds the sprite rendering quad from `size * scale`, so a negative scale flips the quad's winding and the default `RasterizerState.CullCounterClockwise` culls it. Making both of the axes negative would make the thing flip the winding twice, which is why `(-1, -1)` still works somehow.</para>
+    /// <para>the render bus makes the scale absolute and converts the negative/positive meaning to `SpriteEffects.FlipHorizontally` / `FlipVertically` instead. SpriteEffects only mirrors the pixels inside the same box and that the sprite origin mirrors (`size - origin`) to put the box on the other side of the position as well. both the sprites and texts go through the same render process with this sprite effect.</para>
+    /// </summary>
+    /// <returns>SpriteEffects post-processing</returns>
+    private static SpriteEffects ResolveFlip(Vector2 size, ref Vector2 origin, ref Vector2 scale)
+    {
+        SpriteEffects effects = SpriteEffects.None;
+
+        if (scale.X < 0f)
+        {
+            effects |= SpriteEffects.FlipHorizontally;
+            origin.X = size.X - origin.X;
+            scale.X = -scale.X;
+        }
+
+        if (scale.Y < 0f)
+        {
+            effects |= SpriteEffects.FlipVertically;
+            origin.Y = size.Y - origin.Y;
+            scale.Y = -scale.Y;
+        }
+
+        return effects;
     }
 }

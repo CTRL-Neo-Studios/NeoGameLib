@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using NeoGameLib.Common;
 using NeoGameLib.NeoGO;
 using Microsoft.Xna.Framework;
@@ -15,6 +16,9 @@ public class NeoSpriteRenderer : NeoComponent
     private float _depth;
     private Vector2 _anchor = new(0.5f);
     private int _order;
+
+    // the render features on this object, in add order. NeoSpriteRenderFeature adds and removes itself
+    internal readonly List<NeoSpriteRenderFeature> Features = new();
 
     public Texture2D Texture
     {
@@ -77,13 +81,13 @@ public class NeoSpriteRenderer : NeoComponent
         {
             if (_texture is null) return Rectangle.Empty;
 
-            // bounds follow the current frame (source rect) so a collider doesn't grow
-            // to the whole sprite sheet while animating
-            Vector2 frameSize = (SourceRectangle?.Size ?? _texture.Bounds.Size).ToVector2();
-            Vector2 origin = frameSize * _anchor;
-            Vector2 topLeft = ParentTransform.Position - origin * ParentTransform.Scale;
-            Vector2 size = frameSize * ParentTransform.Scale;
-            return new Rectangle((int)topLeft.X, (int)topLeft.Y, (int)size.X, (int)size.Y);
+            // bounds follow the current frame (source rect) so a collider doesn't grow to the whole sprite sheet while animating
+            Vector2 frameSize = (SourceRectangle?.Size ?? _texture.Bounds.Size).ToVector2(), origin = frameSize * _anchor;
+
+            // the bounds are now an absolute positive rectangle by deriving it from the min/max of the two transformed frame corners. `NeoBoxCollider` uses this absolute scale values for size as well
+            Vector2 a = ParentTransform.Position - origin * ParentTransform.Scale, b = a + frameSize * ParentTransform.Scale;
+            Vector2 topLeft = Vector2.Min(a, b), size = Vector2.Max(a, b) - topLeft;
+            return new Rectangle((int) topLeft.X, (int) topLeft.Y, (int) size.X, (int) size.Y);
         }
     }
 
