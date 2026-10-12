@@ -360,10 +360,9 @@ screen = p + center;
 ```
 
 
-
 ---
 
-[0.3.0] for cameras: a world-space camera component. attach one to an object, select it explicitly, and the whole world pass renders through it. UI never sees this matrix
+[0.3.0] for cameras: a world-space camera component. attach one to an object, select it explicitly, and the whole world pass renders through it. UI does not interact with the view mat
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
 NeoObject camObj = World.Instantiate("cam", new Transform(new Vector2(0, 0)));
@@ -371,14 +370,15 @@ NeoCamera cam = camObj.AddComponent(new NeoCamera(RenderBus)); // self-registers
 cam.Zoom = 2f;
 cam.CullingMask = -1; // bitmask of sprite/text Layers this camera draws, default = everything
 
-// every ENABLED camera renders the world stacked in Order (ties = registration order).
-// cameras unregister themselves on destroy, so loading/unloading a world moves its cameras.
-// MainCamera (first enabled) drives WorldToScreen/ScreenToWorld and the OnDraw hook.
-// no enabled camera at all -> the world pass falls back to identity, the pre-camera behavior
+// every ENABLED camera renders the world according to the arranged Order.
+// cameras unregisters themselves on destroy, so loading/unloading a world moves its cameras.
+// MainCamera (the first enabled camera) drives WorldToScreen/ScreenToWorld and the OnDraw hook.
+// no enabled camera at all defaults the world pass back to the identity pass, a.k.a the pre-camera viewport rendering behavior
 Vector2 onScreen = RenderBus.WorldToScreen(new Vector2(100, 50));
 ```
 
-[0.3.0] for ui: screen-space canvases, drawn after the world with an identity matrix so they ignore the camera entirely. retained elements with pixel sizes and normalized anchors/pivots
+[0.3.0] for ui: screen-space canvases, drawn AFTER the world with an identity matrix so they ignore the camera entirely. screen-space contains UI elements using pixel sizes and normalized anchors/pivots.
+// TODO: Implement relative-to-screen-resolution sizing later
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
 NeoCanvas canvas = new();
@@ -390,11 +390,10 @@ NeoPanel panel = new()
 NeoLabel label = new() { Text = "HP 100", Color = Color.White }; // Font is borrowed, never disposed by the UI
 panel.Children.Add(label);
 canvas.Children.Add(panel);
-UIBus.Add(canvas); // NeoGame.UIBus, updated before gameplay, drawn after the world
+UIBus.Add(canvas); // NeoGame.UIBus updates before gameplay and draws its contents after the world
 
 // top-left = parent top-left + parent size * Anchor + Position - own size * Pivot.
-// children nest and paint parent-first. Enabled kills subtree updates, Visible kills subtree draws
 ```
 
-custom elements subclass NeoUIElement and override OnUpdate(GameTime) + OnDraw(SpriteBatch). OnDrawUI(SpriteBatch, GameTime) on your game draws after all canvases, also screen-space
+for implementing custom elements: you should subclass NeoUIElement and override OnUpdate() and OnDraw() functions. OnDrawUI() on your game draws AFTER all canvases and screen-space
 
