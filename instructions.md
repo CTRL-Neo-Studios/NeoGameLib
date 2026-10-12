@@ -403,7 +403,7 @@ UIBus.Add(canvas); // NeoGame.UIBus updates before gameplay and draws its conten
 // top-left = parent top-left + parent size * Anchor + Position - own size * Pivot.
 ```
 
-buttons are clickable labels that read the Input facade, OnClick fires on left-button release inside their bounds:
+buttons are clickable labels that read the Input facade
 
 ```csharp
 NeoButton play = new() { Text = "Play", Font = font, Size = new Vector2(160, 40), Anchor = Vector2.Zero };
