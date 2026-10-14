@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using NeoGameLib.Common;
 using NeoGameLib.NeoGO;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -189,9 +190,11 @@ public class NeoRenderBus
             return tmp != 0 ? tmp : a.Order.CompareTo(b.Order); // higher depth is sorted first for render otherwise use order
         });
 
-        foreach (NeoSpriteRenderer sp in _sprites)
+        using PassSnapshot<NeoSpriteRenderer> sprites = new(_sprites);
+        for (int s = 0; s < sprites.Count; s++)
         {
-            if (sp.Texture is null || !sp.Enabled) continue;
+            NeoSpriteRenderer sp = sprites[s];
+            if (!sp.IsAttached || sp.Texture is null || !sp.Enabled) continue;
             if (mask.HasValue && (sp.Layer & mask.Value) == 0) continue;
 
             Transform transform = sp.ParentTransform;
@@ -199,20 +202,21 @@ public class NeoRenderBus
             Vector2 origin = frameSize * sp.Anchor, scale = transform.Scale;
             SpriteEffects effects = ResolveFlip(frameSize, ref origin, ref scale);
             NeoSpriteDrawInfo info = new(sp.Texture, sp.SourceRectangle, transform.Position, sp.Color, transform.Rotation, origin, scale, effects, sp.Depth);
-            List<NeoSpriteRenderFeature> features = sp.Features;
+            using PassSnapshot<NeoSpriteRenderFeature> features = new(sp.Features);
 
             // features draw in submission order: behind layers, the sprite, then front layers
             for (int i = 0; i < features.Count; i++)
             {
-                if (features[i].Enabled) 
+                if (features[i].IsAttached && features[i].Enabled)
                     features[i].OnDrawBehind(spriteBatch, info);
             }
 
+            if (!sp.IsAttached) continue;
             info.Draw(spriteBatch, sp.Texture, sp.Color);
 
             for (int i = 0; i < features.Count; i++)
             {
-                if (features[i].Enabled) 
+                if (features[i].IsAttached && features[i].Enabled)
                     features[i].OnDrawFront(spriteBatch, info);
             }
         }
@@ -229,9 +233,11 @@ public class NeoRenderBus
             return tmp != 0 ? tmp : a.Order.CompareTo(b.Order);
         });
 
-        foreach (NeoTextRenderer text in _texts)
+        using PassSnapshot<NeoTextRenderer> texts = new(_texts);
+        for (int t = 0; t < texts.Count; t++)
         {
-            if (text.Font is null || string.IsNullOrEmpty(text.Text) || !text.Enabled) continue;
+            NeoTextRenderer text = texts[t];
+            if (!text.IsAttached || text.Font is null || string.IsNullOrEmpty(text.Text) || !text.Enabled) continue;
             if (mask.HasValue && (text.Layer & mask.Value) == 0) continue;
 
             Transform transform = text.ParentTransform;

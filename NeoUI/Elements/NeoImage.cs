@@ -31,10 +31,20 @@ public class NeoImage : NeoUIElement
 
     protected override void OnDraw(SpriteBatch spriteBatch)
     {
-        if (Texture == null || LayoutSize.X <= 0 || LayoutSize.Y <= 0) return;
+        Vector2 size = ScreenTransform.LayoutSize;
+        if (Texture == null || size.X <= 0 || size.Y <= 0) return;
         Vector2 sourceSize = (SourceRectangle?.Size ?? Texture.Bounds.Size).ToVector2();
         if (sourceSize.X <= 0 || sourceSize.Y <= 0) return;
-        spriteBatch.Draw(Texture, LayoutPosition, SourceRectangle, Color, 0, Vector2.Zero,
-            LayoutSize / sourceSize, SpriteEffects.None, 0);
+        spriteBatch.Draw(
+            Texture, 
+            ScreenTransform.LayoutPosition, 
+            SourceRectangle, 
+            Color, 
+            0, 
+            Vector2.Zero, 
+            size / sourceSize, 
+            SpriteEffects.None, 
+            0
+        );
     }
 }

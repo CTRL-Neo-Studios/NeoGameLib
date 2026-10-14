@@ -3,12 +3,12 @@
     <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     
     <PackageId>NeoGameLib</PackageId>
-    <Version>0.3.1</Version>
+    <Version>0.3.2</Version>
     <Authors>Type-32</Authors>
     <Company>CTRL Neo Studios</Company>
-    <Description>NeoGameLib: prefab framework for monogame that packs a lot of punch, with simple collision bus, render bus, etc.</Description>
+    <Description>NeoGameLib: prefab framework for monogame that packs a lot of punch, with not-so-simple collision bus, render bus, architectural stuff, UI stuff, etc.</Description>
     <PackageTags>monogame;gamedev;framework</PackageTags>
-    <PackageLicenseExpression>Unlicense</PackageLicenseExpression>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/CTRL-Neo-Studios/NeoGameLib</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

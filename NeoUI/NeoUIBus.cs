@@ -73,25 +73,27 @@ public sealed class NeoUIBus : IDisposable // I googled this: "c# best practice 
         _next = _end = 0;
     }
 
-    public void Update(GameTime gameTime, Point viewportSize)
+    /// <summary>collect every canvas inside the given viewport rectangle and update them in window pixels.</summary>
+    public void Update(GameTime gameTime, Rectangle viewport)
     {
         ArgumentNullException.ThrowIfNull(gameTime);
-        if (viewportSize.X < 0 || viewportSize.Y < 0) throw new ArgumentOutOfRangeException(nameof(viewportSize));
-        Visit(gameTime, null, viewportSize);
+        if (viewport.Width < 0 || viewport.Height < 0)
+            throw new ArgumentOutOfRangeException(nameof(viewport));
+        
+        Visit(gameTime, null, viewport);
     }
 
     /// <summary>
-    /// Draws in an already-begun, identity-transform SpriteBatch render pass using submission order.
+    /// Draws every canvas in its own SpriteBatch pass, scaled by the canvas Scale, in submission order, inside the current GraphicsDevice viewport.
     /// </summary>
-    /// <remarks>the caller should own Begin/End batch calls. (ideally you shouldn't be using this in any other place)</remarks>
+    /// <remarks>The batch must NOT be begun in this function. The bus calls Begin and End once per canvas, plus once per rotated or scaled element. (ideally you shouldn't be using this in any other place)</remarks>
     public void Draw(SpriteBatch spriteBatch)
     {
         ArgumentNullException.ThrowIfNull(spriteBatch);
-        Viewport viewport = spriteBatch.GraphicsDevice.Viewport;
-        Visit(null, spriteBatch, new Point(viewport.Width, viewport.Height));
+        Visit(null, spriteBatch, spriteBatch.GraphicsDevice.Viewport.Bounds);
     }
 
-    private void Visit(GameTime? gameTime, SpriteBatch? spriteBatch, Point viewportSize)
+    private void Visit(GameTime? gameTime, SpriteBatch? spriteBatch, Rectangle viewport)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_traversing) throw new InvalidOperationException("UI Update and Draw cannot be called recursively.");
@@ -114,7 +116,22 @@ public sealed class NeoUIBus : IDisposable // I googled this: "c# best practice 
             while (_next < _end)
             {
                 NeoCanvas canvas = _canvases[_next++];
-                canvas.Visit(this, canvas, gameTime, spriteBatch, viewportSize);
+                canvas.UpdateScale(viewport);
+                if (spriteBatch == null)
+                {
+                    canvas.Visit(this, canvas, gameTime, null, viewport.Size);
+                    continue;
+                }
+
+                canvas.BeginBatch(spriteBatch, Matrix.Identity);
+                try
+                {
+                    canvas.Visit(this, canvas, null, spriteBatch, viewport.Size);
+                }
+                finally
+                {
+                    spriteBatch.End();
+                }
             }
         }
         finally

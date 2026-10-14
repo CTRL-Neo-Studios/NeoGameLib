@@ -5,11 +5,13 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace NeoGameLib.NeoUI.Elements;
 
+// I need to practice how to write comments.
+
 public class NeoUIElement
 {
-    private Vector2 _position, _size, _anchor, _pivot;
     private int _attachmentVersion, _traversalVersion;
-    private bool _traversing;
+    private bool _traversing, _hasSlot;
+    private Vector2 _slotPosition, _slotSize;
 
     public NeoUIElement()
     {
@@ -19,55 +21,129 @@ public class NeoUIElement
     public NeoUIChildren Children { get; }
     public NeoUIElement? Parent { get; private set; }
 
-    /// <summary>Disables updates for this subtree, independent from the Visible attr.</summary>
+    public ScreenTransform ScreenTransform { get; } = new();
+
+    /// <summary>Disables updates for this subtree. Independent of Visible.</summary>
     public bool Enabled { get; set; } = true;
 
-    /// <summary>Hides this subtree, independent from the Enabled attr.</summary>
+    /// <summary>Hides this subtree. Independent of Enabled.</summary>
     public bool Visible { get; set; } = true;
 
-    // yay encapsulation
-    public Vector2 Position
-    {
-        get => _position;
-        set { ValidateVector(value, false); _position = value; }
-    }
-
-    public Vector2 Size
-    {
-        get => _size;
-        set { ValidateVector(value, true); _size = value; }
-    }
-
-    public Vector2 Anchor
-    {
-        get => _anchor;
-        set { ValidateNormalized(value); _anchor = value; }
-    }
-
-    public Vector2 Pivot
-    {
-        get => _pivot;
-        set { ValidateNormalized(value); _pivot = value; }
-    }
-
-    /// <summary>the viewport-local pixel position from the latest update or draw</summary>
-    public Vector2 LayoutPosition { get; private set; }
-    public Vector2 LayoutSize { get; private set; }
+    /// <summary>Matrix applying this element's rotation/scale, for drawing and hit-testing.</summary>
+    public Matrix VisualMatrix { get; private set; } = Matrix.Identity;
 
     public virtual void OnUpdate(GameTime gameTime) { }
 
-    /// <summary>draws before children INSIDE the CALLER'S active screen-space batch</summary>
     protected virtual void OnDraw(SpriteBatch spriteBatch) { }
 
-    protected virtual Vector2 MeasureSize() => Size;
+    /// <summary>This element's own content size, e.g. measured text. Fit takes the larger of this and the children.</summary>
+    protected virtual Vector2 MeasureContent() => Vector2.Zero;
+
+    /// <summary>Gets smallest box that holds all visible children.</summary>
+    private protected virtual Vector2 MeasureChildren()
+    {
+        Vector2 fit = Vector2.Zero;
+        foreach (NeoUIElement child in Children)
+        {
+            if (!child.Visible) continue;
+            
+            ScreenTransform t = child.ScreenTransform;
+            fit = Vector2.Max(fit, new Vector2(
+                FitAxis(t.Anchor.X, t.Pivot.X, t.Position.X, t.DesiredSize.X),
+                FitAxis(t.Anchor.Y, t.Pivot.Y, t.Position.Y, t.DesiredSize.Y)
+            ));
+        }
+        return fit;
+    }
+
+    // Gets smallest parent length that keeps the child inbetween 0 & length on one axis.
+    private static float FitAxis(float anchor, float pivot, float position, float size)
+    {
+        float need = 0;
+        if (anchor < 1) need = MathF.Max(need, (position + (1 - pivot) * size) / (1 - anchor));
+        if (anchor > 0) need = MathF.Max(need, (pivot * size - position) / anchor);
+        return need;
+    }
+
+    // Bottom-up: children is iterated first so that a parent with Fit sizing mode can account for their DesiredSize.
+    // Fill measures into Size attr and is stretched on placement.
+    private void Measure()
+    {
+        foreach (NeoUIElement child in Children)
+            if (child.Visible) child.Measure();
+
+        Vector2 fit = Vector2.Max(MeasureContent(), MeasureChildren()) + ContentPadding.Total;
+        ScreenTransform.DesiredSize = new Vector2(
+            (ScreenTransform.WidthMode == NeoUISizing.Fit) ? fit.X : ScreenTransform.Size.X,
+            (ScreenTransform.HeightMode == NeoUISizing.Fit) ? fit.Y : ScreenTransform.Size.Y
+        );
+    }
+
+    private protected virtual NeoPadding ContentPadding => default;
+
+    /// <summary>Top-left of the padded box children are laid out in.</summary>
+    private protected Vector2 InnerPosition => ScreenTransform.LayoutPosition + ContentPadding.TopLeft;
+
+    /// <summary>Size of the padded box children are laid out in.</summary>
+    private protected Vector2 InnerSize => Vector2.Max(Vector2.Zero, ScreenTransform.LayoutSize - ContentPadding.Total);
+
+    public NeoCanvas? Canvas
+    {
+        get
+        {
+            NeoUIElement root = this;
+            while (root.Parent != null) root = root.Parent;
+            return root as NeoCanvas;
+        }
+    }
+
+    /// <summary>Converts a window-pixel point (e.g. Input.MousePosition) to this element's layout space.</summary>
+    public Vector2 ScreenToLocal(Vector2 screen)
+    {
+        return Vector2.Transform(Canvas?.ScreenToCanvas(screen) ?? screen, Matrix.Invert(VisualMatrix));
+    }
+
+    /// <summary>Returns true when the window-pixel point is inside this element's DRAWN box</summary>
+    public bool ContainsScreenPoint(Vector2 screen)
+    {
+        // Zeros scale up the tree flattens the box
+        if (MathF.Abs(VisualMatrix.Determinant()) < 1e-12f) return false;
+        
+        Vector2 p = ScreenToLocal(screen);
+        Vector2 min = ScreenTransform.LayoutPosition, max = min + ScreenTransform.LayoutSize;
+        return p.X >= min.X && p.X <= max.X && p.Y >= min.Y && p.Y <= max.Y;
+    }
+
+    /// <summary>Places children before they are visited -- mainly for containers like NeoFlexBox to override.</summary>
+    private protected virtual void ArrangeChildren() { }
+
+    /// <summary>Gives a child its layout rect for this pass</summary>
+    private protected static void Place(NeoUIElement child, Vector2 position, Vector2 size)
+    {
+        child._slotPosition = position;
+        child._slotSize = size;
+        child._hasSlot = true;
+    }
 
     internal void AttachTo(NeoUIElement? parent)
     {
         Parent = parent;
+        _hasSlot = false;
         InvalidateAttachment();
     }
 
     internal void InvalidateAttachment() => _attachmentVersion++;
+
+    // Scale & rotate around the pivot of the box.
+    private Matrix LocalVisualMatrix()
+    {
+        ScreenTransform t = ScreenTransform;
+        Vector3 pivot = new(t.LayoutPosition + t.LayoutSize * t.Pivot, 0);
+        return Matrix.CreateTranslation(-pivot) *
+               Matrix.CreateScale(t.Scale.X, t.Scale.Y, 1) *
+               Matrix.CreateRotationZ(t.Rotation) *
+               Matrix.CreateTranslation(pivot);
+    }
 
     internal void Visit(NeoUIBus bus, NeoCanvas root, GameTime? gameTime, SpriteBatch? spriteBatch, Point viewportSize)
     {
@@ -78,20 +154,63 @@ public class NeoUIElement
         _traversing = true;
         _traversalVersion = _attachmentVersion;
         Children.BeginTraversal();
+        bool rebatched = false;
+        Matrix restore = Matrix.Identity;
         try
         {
             if (!CanVisit(bus, root, drawing)) return;
-            LayoutSize = ReferenceEquals(this, root) ? viewportSize.ToVector2() : MeasureSize();
-            LayoutPosition = ReferenceEquals(this, root) ? Vector2.Zero : Parent.LayoutPosition + Parent.LayoutSize * Anchor + Position - LayoutSize * Pivot;
+            ScreenTransform t = ScreenTransform;
+            if (ReferenceEquals(this, root))
+            {
+                t.LayoutSize = viewportSize.ToVector2() / root.Scale;
+                t.LayoutPosition = Vector2.Zero;
+                VisualMatrix = Matrix.Identity; // canvas is root; its own Rotation/Scale do nothing
+                Measure();
+            }
+            else
+            {
+                if (_hasSlot)
+                {
+                    t.LayoutSize = _slotSize;
+                    t.LayoutPosition = _slotPosition;
+                }
+                else
+                {
+                    Vector2 parentSize = Parent.InnerSize;
+                    t.LayoutSize = new Vector2(
+                        t.WidthMode == NeoUISizing.Fill ? parentSize.X : t.DesiredSize.X,
+                        t.HeightMode == NeoUISizing.Fill ? parentSize.Y : t.DesiredSize.Y
+                    );
+                    t.LayoutPosition = Parent.InnerPosition + parentSize * t.Anchor + t.Position - t.LayoutSize * t.Pivot;
+                }
+
+                VisualMatrix = t.HasVisualTransform ? LocalVisualMatrix() * Parent.VisualMatrix : Parent.VisualMatrix;
+
+                if (drawing && t.HasVisualTransform)
+                {
+                    restore = Parent.VisualMatrix;
+                    spriteBatch.End();
+                    root.BeginBatch(spriteBatch, VisualMatrix);
+                    rebatched = true;
+                }
+            }
+            ArrangeChildren();
 
             if (drawing) OnDraw(spriteBatch);
             else OnUpdate(gameTime);
 
             while (CanVisit(bus, root, drawing) && Children.TryNext(out NeoUIElement child))
+            {
                 child.Visit(bus, root, gameTime, spriteBatch, viewportSize);
+            }
         }
         finally
         {
+            if (rebatched)
+            {
+                spriteBatch.End();
+                root.BeginBatch(spriteBatch, restore);
+            }
             Children.EndTraversal();
             _traversing = false;
         }
@@ -108,25 +227,10 @@ public class NeoUIElement
         }
         return false;
     }
-
-    private static void ValidateVector(Vector2 value, bool nonnegative)
-    {
-        if (
-            !float.IsFinite(value.X) || 
-            !float.IsFinite(value.Y) || 
-            (nonnegative && (value.X < 0 || value.Y < 0))
-        )
-            throw new ArgumentOutOfRangeException(nameof(value), "UI coordinates must be finite and non-negative sizes");
-    }
-
-    private static void ValidateNormalized(Vector2 value)
-    {
-        ValidateVector(value, true);
-        if (value.X > 1 || value.Y > 1) throw new ArgumentOutOfRangeException(nameof(value), "anchors and pivots must be between 0 and 1");
-    }
 }
 
-/// <summary>Owned children in render order. do remove a child before adding it to a different parent.</summary>
+/// <summary>Children in render order.</summary>
+/// <remarks>Remove before reparenting.</remarks>
 public sealed class NeoUIChildren : Collection<NeoUIElement>
 {
     private readonly NeoUIElement _owner;
@@ -151,6 +255,7 @@ public sealed class NeoUIChildren : Collection<NeoUIElement>
     {
         if (ReferenceEquals(this[index], item)) return;
         ValidateChild(item);
+        
         NeoUIElement old = this[index];
         base.SetItem(index, item);
         old.AttachTo(null);
@@ -172,6 +277,7 @@ public sealed class NeoUIChildren : Collection<NeoUIElement>
     protected override void ClearItems()
     {
         for (int i = 0; i < Count; i++) this[i].AttachTo(null);
+        
         base.ClearItems();
         _next = _end = 0;
     }

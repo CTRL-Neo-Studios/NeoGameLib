@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using NeoGameLib.Common;
 using Microsoft.Xna.Framework;
 
 namespace NeoGameLib.NeoGO;
@@ -82,13 +83,14 @@ public class WorldManager
     }
 
     // note to self:
-    // unloads everything but all registered worlds stay registered
+    // unloads everything but all registered worlds stay registered.
+    // the loaded set is emptied first, so an OnDestroy that loads a world during this call keeps that new world loaded
     public void UnloadAll()
     {
-        for (int i = _loaded.Count - 1; i >= 0; i--)
-            _loaded[i].Clear();
-
+        using PassSnapshot<NeoWorld> worlds = new(_loaded);
         _loaded.Clear();
+        for (int i = worlds.Count - 1; i >= 0; i--)
+            worlds[i].Clear();
     }
 
     public NeoWorld GetWorld(string name)
@@ -154,8 +156,12 @@ public class WorldManager
     // NeoGame calls this every frame so that every loaded world gets ticked
     public void Update(GameTime gameTime)
     {
-        // components can Load/Unload worlds mid-tick so using an index loop here instead of foreach
-        for (int i = 0; i < _loaded.Count; i++)
-            _loaded[i].Update(gameTime);
+        // snapshot (see PassSnapshot): components can Load/Unload worlds mid-tick. a world unloaded during the pass is skipped, a world loaded during the pass starts ticking next frame
+        using PassSnapshot<NeoWorld> worlds = new(_loaded);
+        for (int i = 0; i < worlds.Count; i++)
+        {
+            if (_loaded.Contains(worlds[i]))
+                worlds[i].Update(gameTime);
+        }
     }
 }

@@ -3,18 +3,19 @@ using Microsoft.Xna.Framework;
 namespace NeoGameLib.Common;
 
 // note to future self:
-// the bus that ticks every registered timer. timers register/unregister themselves on start/stop/finish
-// the update iterates backwards so a timer finishing (or its OnFinished callback stopping OTHER timers) can remove itself from the loop without through null index exceptions
+// the bus that ticks every registered timer. timers register/unregister themselves on start/stop/finish.
+// the update walks a snapshot (see PassSnapshot): a callback that stops, starts or restarts any timer can't make another timer tick twice or get skipped.
 public class NeoTimerBus : NeoBus<NeoTimer>
 {
     public void Update(GameTime gameTime)
     {
         float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
-        for (int i = Items.Count - 1; i >= 0; i--)
+        using PassSnapshot<NeoTimer> timers = new(Items);
+        for (int i = 0; i < timers.Count; i++)
         {
-            if (i >= Items.Count) continue;
-            Items[i].Tick(dt);
+            if (Items.Contains(timers[i]))
+                timers[i].Tick(dt);
         }
     }
 }

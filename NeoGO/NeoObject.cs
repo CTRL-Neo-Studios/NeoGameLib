@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using NeoGameLib.Common;
 using Microsoft.Xna.Framework;
 
 namespace NeoGameLib.NeoGO;
@@ -70,6 +71,7 @@ public class NeoObject
         if (component is null || component.ParentObject is not null) throw new Exception();
 
         component.ParentObject = this;
+        component._detaching = false;
         _components.Add(component);
         component.OnAwake();
         return component;
@@ -106,9 +108,10 @@ public class NeoObject
 
     public bool RemoveComponent(NeoComponent component)
     {
-        if (component is null || !_components.Remove(component))
+        if (component is null || component._detaching || !_components.Remove(component))
             return false;
 
+        component._detaching = true;
         component.OnDestroy(); // TODO: separate the remove component event from destroy component event in the future maybe, considering they're different events; or not since they have the same outcome...?
         component.ParentObject = null;
         return true;
@@ -138,22 +141,26 @@ public class NeoObject
         if (IsDestroyed) return; // If tick is somehow ran after it's destroyed via world queue, this prevents logic in tick from running after destroy
 
         // note to future self:
-        // index-based loop ON PURPOSE to prevent "Collection was modified" exception thrown IF an object adds another component during runtime
-        for (int i = 0; i < _components.Count; i++)
+        // walks a snapshot (see PassSnapshot): a component that removes itself or a sibling no longer makes the next one skip its update, and one added during the tick starts next tick.
+        // IsAttached is checked per component so a removed or destroyed one is never called again this tick
+        using PassSnapshot<NeoComponent> components = new(_components);
+        for (int i = 0; i < components.Count; i++)
         {
-            NeoComponent component = _components[i];
-            if (!component.Enabled) continue;
+            if (IsDestroyed) return;
+            NeoComponent component = components[i];
+            if (!component.IsAttached || !component.Enabled) continue;
 
             if (!component.HasRanOnStart)
             {
                 component.HasRanOnStart = true;
                 component.OnStart();
+                if (!component.IsAttached || !component.Enabled) continue;
             }
 
             component.OnUpdate(gameTime);
         }
     }
-    
+
     // note to future self: this destroys the object directly via marking it as destroyed
     public void DestroyImmediate()
     {
@@ -161,11 +168,14 @@ public class NeoObject
 
         IsDestroyed = true;
 
-        // backwards index loop, same reason as Tick: OnDestroy is user code and might
-        // mutate the list it's running on
-        for (int i = _components.Count - 1; i >= 0; i--)
+        // backwards over a snapshot: OnDestroy is user code and can remove siblings. the `_detaching` flag makes sure each component gets exactly one OnDestroy even if a sibling removed it first
+        using PassSnapshot<NeoComponent> components = new(_components);
+        for (int i = components.Count - 1; i >= 0; i--)
         {
-            _components[i].OnDestroy();
+            NeoComponent component = components[i];
+            if (component._detaching) continue;
+            component._detaching = true;
+            component.OnDestroy();
         }
 
         _components.Clear();
