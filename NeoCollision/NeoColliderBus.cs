@@ -19,6 +19,13 @@ namespace NeoGameLib.NeoCollision;
 //
 // also TODO for future features to impl: enter/stay/exit tracking, CCD
 // enter/stay/exit is basically like 40-ish lines of diffing a HashSet of active pairs, you can add it ONLY when a damage system needs to fire once per contact and not every frame
+//
+// note to future self:
+// OnCollision is user code and can do ANYTHING mid-pass: destroy objects, remove colliders, unload/load worlds.
+// so the pass runs over a snapshot (see PassSnapshot) with bounds and groups cached at the start:
+// - a collider removed/destroyed mid-pass gets no more callbacks this pass, and no pair is reported with stale indices
+// - a collider added mid-pass (e.g. a world loaded from a callback) starts colliding next pass
+// - Collisions only holds pairs whose callbacks actually runs
 public class NeoColliderBus : NeoBus<NeoBoxCollider>
 {
     private WorldManager _worldManager;
@@ -44,23 +51,27 @@ public class NeoColliderBus : NeoBus<NeoBoxCollider>
     {
         _collisions.Clear();
 
-        if (_bounds.Length < Items.Count)
+        using PassSnapshot<NeoBoxCollider> colliders = new(Items);
+        int count = colliders.Count;
+        if (_bounds.Length < count)
         {
-            _bounds = new Rectangle[Items.Count];
-            _groups = new int[Items.Count];
+            _bounds = new Rectangle[count];
+            _groups = new int[count];
         }
 
         // caches the bounds and collision groups once per collider per frame.
         // group `-1` == ungrouped
-        for (int i = 0; i < Items.Count; i++)
+        for (int i = 0; i < count; i++)
         {
-            _bounds[i] = Items[i].Enabled ? Items[i].Bounds : Rectangle.Empty;
-            _groups[i] = _worldManager?.GetCollisionGroupId(Items[i].ParentObject.World?.Name) ?? -1;
+            NeoBoxCollider c = colliders[i];
+            bool live = c.IsAttached && c.Enabled;
+            _bounds[i] = live ? c.Bounds : Rectangle.Empty;
+            _groups[i] = live ? _worldManager?.GetCollisionGroupId(c.ParentObject.World?.Name) ?? -1 : -1;
         }
 
-        for (int i = 0; i < Items.Count; i++)
+        for (int i = 0; i < count; i++)
         {
-            for (int j = i + 1; j < Items.Count; j++)
+            for (int j = i + 1; j < count; j++)
             {
                 if (!_bounds[i].Intersects(_bounds[j])) continue;
 
@@ -68,26 +79,31 @@ public class NeoColliderBus : NeoBus<NeoBoxCollider>
                 // same group runs the check, different groups does not run the check, -1 and other groups does not run the check
                 if (_groups[i] != _groups[j] && (_groups[i] >= 0 || _groups[j] >= 0)) continue; // if group gates are different and that groups aren't ungrouped, skip
 
-                NeoBoxCollider a = Items[i];
-                NeoBoxCollider b = Items[j];
+                NeoBoxCollider a = colliders[i];
+                NeoBoxCollider b = colliders[j];
+
+                // an earlier callback this pass may have removed either collider or destroyed its object
+                if (!a.IsAttached || !b.IsAttached) continue;
 
                 NeoCollision col = new(a, b, Rectangle.Intersect(_bounds[i], _bounds[j]));
                 _collisions.Add(col);
 
-                for (int k = 0; k < a.ParentObject.Components.Count; k++)
-                {
-                    NeoComponent c = a.ParentObject.Components[k];
-                    if (c.Enabled && c is ICollision handler) handler.OnCollision(b, col);
-                } // calling ICollision interfaces on object A
-                
-                for (int k = 0; k < b.ParentObject.Components.Count; k++)
-                {
-                    NeoComponent c = b.ParentObject.Components[k];
-                    if (c.Enabled && c is ICollision handler) handler.OnCollision(a, col);
-                } // calling ICollision interfaces on object B
+                NotifyHandlers(a, b, col); // calling ICollision interfaces on object A
+                if (a.IsAttached && b.IsAttached) NotifyHandlers(b, a, col); // calling ICollision interfaces on object B
             }
         }
 
         return _collisions;
+    }
+
+    private static void NotifyHandlers(NeoBoxCollider self, NeoBoxCollider other, NeoCollision col)
+    {
+        using PassSnapshot<NeoComponent> components = new(self.ParentObject.Components);
+        for (int k = 0; k < components.Count; k++)
+        {
+            if (!self.IsAttached || !other.IsAttached) return;
+            NeoComponent c = components[k];
+            if (c.IsAttached && c.Enabled && c is ICollision handler) handler.OnCollision(other, col);
+        }
     }
 }

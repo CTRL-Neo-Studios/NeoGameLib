@@ -403,16 +403,14 @@ Vector2 onScreen = RenderBus.WorldToScreen(new Vector2(100, 50));
 ```
 
 ## [0.3.0] Screen-Space UI
-screen-space canvases, drawn AFTER the world with an identity matrix so they ignore the camera entirely. screen-space contains UI elements using pixel sizes and normalized anchors/pivots.
-
-// TODO: Implement relative-to-screen-resolution sizing later
+screen-space canvases, drawn AFTER the world so they ignore the camera entirely. screen-space contains UI elements using UI units and normalized anchors/pivots. by default 1 UI unit = 1 window pixel, see the 0.3.1 UI scaling section for resolution scaling.
 
 ```csharp [InsideAClassInheritingNeoGameClass.cs]
 NeoCanvas canvas = new();
 NeoPanel panel = new()
 {
-    Position = new Vector2(10, 10), Size = new Vector2(200, 100),
-    Anchor = Vector2.Zero, Pivot = Vector2.Zero, Color = Color.Gray
+    Transform = { Position = new Vector2(10, 10), Size = new Vector2(200, 100), Anchor = Vector2.Zero, Pivot = Vector2.Zero },
+    Color = Color.Gray
 };
 NeoLabel label = new() { Text = "HP 100", Color = Color.White }; // Font is borrowed, never disposed by the UI
 panel.Children.Add(label);
@@ -420,17 +418,18 @@ canvas.Children.Add(panel);
 UIBus.Add(canvas); // NeoGame.UIBus updates before gameplay and draws its contents after the world
 
 // top-left = parent top-left + parent size * Anchor + Position - own size * Pivot.
+// Anchor and Pivot are centered (0.5, 0.5) by default since 0.3.1
 ```
 
 buttons are clickable labels that read the Input facade
 
 ```csharp
-NeoButton play = new() { Text = "Play", Font = font, Size = new Vector2(160, 40), Anchor = Vector2.Zero };
+NeoButton play = new() { Text = "Play", Font = font, Transform = { Anchor = Vector2.Zero, Pivot = Vector2.Zero } }; // sizes itself to the text
 play.OnClick = () => { /* start game */ };
 panel.Children.Add(play);
 ```
 
-for implementing custom elements: you should subclass NeoUIElement and override OnUpdate() and OnDraw() functions. OnDrawUI() on your game draws AFTER all canvases and screen-space
+for implementing custom elements: you should subclass NeoUIElement and override OnUpdate() and OnDraw() functions. OnDrawUI() on your game draws AFTER all canvases and screen-space. override MeasureContent() to tell Fit how big your content is.
 
 ---
 
@@ -503,3 +502,308 @@ NeoOutlineFeature outline = crystal.AddComponent(new NeoOutlineFeature { Color =
 outline.Enabled = renderer.IsCursorOnSprite();
 ```
 
+---
+
+## [0.3.2] UI sizing and FlexBox
+
+every element picks its size per axis with `Transform.WidthMode` and `Transform.HeightMode`:
+- `Fixed` (default): use `Size`.
+- `Fill`: attempts to resize to parent's full length.
+- `Fit`: wraps the content; as in measured text for labels/buttons or a box that holds any children.
+
+labels and buttons start as `Fit` on both axes. this replaces the old `AutoSize` flag. to give a button a fixed size, set the mode back to `Fixed` and set `Size`.
+
+```csharp
+// a panel that wraps its children. no flexbox
+NeoPanel card = new()
+{
+    Transform = { WidthMode = NeoUISizing.Fit, HeightMode = NeoUISizing.Fit }, Color = Color.Gray,
+    Padding = new NeoPadding(16, 8) // 16 left and right, 8 top and bottom
+};
+card.Children.Add(new NeoLabel { Text = "HP 100", Font = font });
+```
+
+panels (and flexboxes, since they inherit panels) have per-side `Padding`. the children anchors to the padded inner box where `Fill` takes the inner size and `Fit` adds the padding around the children.
+
+```csharp
+panel.Padding = 12; // same on all four sides
+panel.Padding = new NeoPadding(16, 8); // horizontal, vertical
+panel.Padding = new NeoPadding(4, 8, 4, 16); // left, top, right, bottom
+panel.Padding = new NeoPadding(8) { Bottom = 24 }; // 8 everywhere except the bottom
+```
+
+negative or non-finite padding throws. (Ideally I should change this in the future but for now this works) If the padding is bigger than the panel then it'll squeeze the inner box to 0.
+
+`NeoFlexBox` is a `NeoPanel` that orders its children in a row or a column. it controls the children's positions.
+
+```csharp
+NeoFlexBox menu = new()
+{
+    Direction = NeoFlexDirection.Column,
+    Gap = 8, Padding = 12,
+    Justify = NeoFlexAlign.Center,
+    Align = NeoFlexAlign.Stretch,
+    Transform = { WidthMode = NeoUISizing.Fit, HeightMode = NeoUISizing.Fit },
+    Color = Color.DarkSlateGray
+};
+menu.Children.Add(new NeoButton { Text = "Play", Font = font });
+menu.Children.Add(new NeoButton { Text = "Quit", Font = font });
+```
+
+When `Direction = Column`:
+
+```
+ Align = Start            Align = Center           Align = End              Align = Stretch
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│[Play]            │     │      [Play]      │     │            [Play]│     │[      Play      ]│
+│[Settings     ]   │     │  [Settings     ] │     │   [Settings     ]│     │[    Settings    ]│
+│[Quit  ]          │     │     [Quit  ]     │     │          [Quit  ]│     │[      Quit      ]│
+└──────────────────┘     └──────────────────┘     └──────────────────┘     └──────────────────┘
+  own widths, left         own widths, middle       own widths, right        all = inner width
+```
+
+When `Direction = Row`:
+
+```
+ Align = Start                          Align = Stretch
+┌────────────────────────────┐         ┌────────────────────────────┐
+│[A ]┌─────┐[C]              │         │┌──┐┌─────┐┌─┐              │
+│    │  B  │                 │         ││A ││  B  ││C│              │
+│    └─────┘                 │         ││  ││     ││ │              │
+│                            │         │└──┘└─────┘└─┘              │
+└────────────────────────────┘         └────────────────────────────┘
+  own heights, top-aligned               all = inner height
+```
+
+Padding & Box:
+
+```
+┌────────────────────────┐
+│ ← Padding              │
+│  ┌──────────────────┐  │
+│  │ child (stretched)│  │   stretched width = box width − Padding.Left − Padding.Right
+│  └──────────────────┘  │
+│                 Gap ↕  │
+│  ┌──────────────────┐  │ <- Box
+│  │ child (stretched)│  │
+│  └──────────────────┘  │
+└────────────────────────┘
+```
+
+Growing Children along the axes w/ `Fill`:
+
+```
+ widths: [Fixed 40] [Fill] [Fill]   in a 200-wide row, Gap = 0
+┌──────────────────────────────────┐
+│[ 40 ][     80     ][     80     ]│
+└──────────────────────────────────┘
+```
+
+(I asked chat gippity to help me draw in ascii how the general concept (so not just limited to this library, applies to other UI lib flex, though details may vary) of Align, Direction, Flexbox should work.)
+
+// TODO: wrapping onto a second line, min/max sizes.
+
+---
+
+## [0.3.2] UI scaling
+
+every canvas picks how the viewport pixels turn into UI units. the viewport is the game's draw box: the letterboxed area when `ViewportAspect` is set, else the whole window. the canvas layout size is `viewport / Scale`, so everything inside it (anchors, padding, flexbox, Fit) works in UI units and doesn't care about the resolution.
+
+```csharp
+// the default of ScaleFactor is 1 UI unit = ScaleFactor viewport pixels (1 by default), same as before 0.3.1
+NeoCanvas debug = new() { ScaleFactor = 2f };
+
+// design at 1280x720 & grow/shrink with the viewport
+NeoCanvas hud = new()
+{
+    ScaleMode = NeoCanvasScaleMode.ScaleWithScreen,
+    ReferenceResolution = new Vector2(1280, 720),
+    Match = 1f, // 0 = follow viewport width, 1 = follow viewport height, between = blend
+    PixelPerfect = false // true = whole-number scale (at least 1) + point sampling, for pixel-art UI
+};
+float scale = hud.Scale; // viewport pixels per UI unit, updated every pass
+```
+
+`Match` blends in log space like unity does, so 0.5 treats a 2x-wider viewport the same as a 2x-taller one. with `ViewportAspect` set to the reference ratio (e.g. 16:9 for 1280x720) the viewport always has that shape, so every `Match` value gives the same exact scale. a window resize, a window mode change or a new `ViewportAspect` gets picked up on the next update.
+
+each canvas draws in its own SpriteBatch pass scaled by `Scale`, so text, panels and images all scale with no per-element code. `OnDrawUI` still draws afterwards in plain viewport pixels.
+
+mouse: the mouse is in window pixels, the layout is in UI units. buttons convert already. custom elements do the same:
+
+```csharp
+bool over = ContainsScreenPoint(Input.MousePosition); // inside this element as drawn: letterbox, canvas scale, Rotation/Scale all handled
+Vector2 local = ScreenToLocal(Input.MousePosition); // window pixels -> this element's untransformed layout space
+Vector2 back = canvas.CanvasToScreen(element.Transform.LayoutPosition); // UI units -> window pixels
+```
+
+heads up: SpriteFont is a bitmap, so text scaled way up gets blurry. load a bigger font for big scale ranges.
+
+---
+
+## [0.3.2] Letterbox viewport
+
+the game viewport doesn't have to match the window anymore. set an aspect ratio and the game draws into the largest box with that ratio that fits the window, centered, with bars around it:
+
+```csharp
+ViewportAspect = 16f / 9f; // null (default) = fill the whole window
+LetterboxColor = Color.Black; // the bars
+ClearColor = Color.CornflowerBlue; // the viewport background, replaces the hardcoded clear
+Rectangle box = ViewportBounds; // window-pixel rectangle the game draws into
+```
+
+cameras, sprites, canvases, OnDraw and OnDrawUI all work inside that box, so a canvas with `ReferenceResolution = 1280x720` in a 16:9 viewport scales exactly with no `Match` compromise. `Input.MousePosition` stays in window pixels; `RenderBus.ScreenToWorld`, `NeoCanvas.ScreenToCanvas` and `ContainsScreenPoint` remove the bar offset.
+
+the viewport is re-applied every update and draw, so window resizes and window mode switches keep the bars right. this is NOT a virtual resolution: everything still renders at native pixels, nothing is resampled.
+
+---
+
+## [0.3.2] ScreenTransform
+
+UI layout moved from the element onto `element.Transform`, a `ScreenTransform`. it inherits the world `Transform`, so `Position`, `Rotation`, `Scale` and the Up/Right helpers are the same members you use on game objects, plus:
+
+```csharp
+NeoPanel badge = new()
+{
+    Transform =
+    {
+        Size = new Vector2(64, 64),
+        Anchor = new Vector2(1, 0), Pivot = new Vector2(1, 0), // top-right corner
+        Position = new Vector2(-8, 8),
+        WidthMode = NeoUISizing.Fixed, HeightMode = NeoUISizing.Fixed,
+        Rotation = MathHelper.ToRadians(15), Scale = new Vector2(1.2f) // visual only
+    }
+};
+Vector2 topLeft = badge.Transform.LayoutPosition; // computed, read-only: LayoutPosition, LayoutSize, DesiredSize
+```
+
+- `Transform` is get-only: one transform per element, set it with the nested `Transform = { ... }` initializer.
+- Anchor and Pivot default to (0.5, 0.5), centered. NeoFlexBox children and canvases ignore them.
+- Rotation (radians) and Scale work like a CSS transform: the element and its children turn/scale around the Pivot when drawn. layout, Fit and NeoFlexBox use the untransformed box, so a rotated button doesn't push its neighbours around. hit tests (`ContainsScreenPoint`, buttons) follow the drawn shape.
+- a rotated or scaled element costs one extra SpriteBatch pass for its subtree. the canvas's own Rotation/Scale do nothing, use the canvas scale settings instead.
+
+
+---
+
+## [0.3.2] Much Fucking Better Lifecycle Iterations & During-Iteration Modification Handling.
+
+you can now load/unload worlds, destroy objects, add/remove components, start/stop timers and add/remove cameras or sprites now safely from inside ANY callback: `OnUpdate`, `OnStart`, `OnCollision`, `OnDestroy`, timer callbacks, render features, `OnDraw`.
+
+This liberates the need to defer a scene switch anymore.
+
+```csharp
+public class Portal : NeoComponent, ICollision
+{
+    public void OnCollision(NeoBoxCollider other, NeoCollision collision)
+    {
+        WorldManager.Unload("level1"); // fine mid-collision now
+        WorldManager.Load("level2");
+    }
+}
+```
+
+### `PassSnapshot<T>` Disposable Struct Helper
+
+A wrapper that helps with iterating loops, with functions that helps process removal-during-iteration or addition-during-iteration.
+
+#### The problem
+
+The problem we have before that is existent in EACH LIFECYCLE of NeoGameLib is that a list can be mutated during iteration.
+
+For example: while iterating through a game object list, a component from a game object could:
+
+1. kill a game object in that list;
+2. add a new game object ot that list;
+3. kill every game object in that list.
+
+What results from that example:
+
+1. a "Collection was modified" runtime exception that explodes the game;
+2. skipped items -- an item at index 3 was removed while the loop is still iterating on index 3, and index 4 skips to index 3 -- causing the original index 4-but-now-3-object skipped, game explodes;
+3. An object was destroyed already but its update function was still called in the next tick because indexes are stale, game explodes
+
+There are easy micro fixes to prevent some of the issues, i.e. a reverse-for-loop can solve the removal-during-iteration but not the addition issue; `list.ToArray()` generates fucking garbage every fucking frame which will slow down the game tick loop a lot; snapshotting into a list which shares the same GC problem; locking/deferring modifications to a queue which requires more mental power for me to implement and it's way too inconvenient to keep track of every single callback.
+
+#### What this struct does
+
+So this struct was created to address all of the above. Mechanically, it does 4 things:
+
+1. Copies the list at the start of the pass into a shared array, which prevents modification of the list since user code modifies the real list, not the copied list. Everything the user code modifies to the real list is then snapshotted in the next frame and then ran.
+2. Uses the Shared Array Pool instead of creating a new list instance every time. The `ArrayPool<T>.Shared` gives a pre-existing array so there's no new-list-creating and no GC required for creating a list.
+3. Clears its own pool for stale references (i.e. dead objects, etc.) before returning it back
+4. Each call gets its own snapshot: for example, if an enemy update func needs to iterate through another list i.e. collisions list or its "children", the inner loop rents its own array. Simpler words: nesting works.
+
+#### Caveats
+
+Some caveats while using this:
+
+- You must check `IsAttached` or its equivalent in the loop iteration. Since the snapshot won't know that an item was destroyed after it's copied.
+- "Removed" means "detached from array", but not null in the snapshot. You'll decide whether that reference is still alive.
+- Count is readonly. (duh)
+- If the list is empty, it'll still rent a 0-length array. But this is much better than creating a list on each update tick so a very efficient compromise.
+
+### Usage of the Helper Struct
+
+This is the basic shape of using it:
+
+```csharp
+using PassSnapshot<Enemy> pass = new PassSnapshot<Enemy>(enemies);
+for (int i = 0; i < pass.Count; i++)
+{
+    Enemy enemy = pass[i];
+    if (!enemy.IsAttached) continue; // it may've been destroyed earlier in this same pass
+    enemy.Update();
+}
+```
+
+This shape should handle the removal/addition-during-iteration issues by default.
+
+This is the nested version:
+
+```csharp
+using PassSnapshot<Enemy> pass = new PassSnapshot<Enemy>(enemies);
+for (int i = 0; i < pass.Count; i++)
+{
+    Enemy enemy = pass[i];
+    if (!enemy.IsAttached) continue;
+
+    using PassSnapshot<Bullet> children = new PassSnapshot<Bullet>(enemy.Children);
+    for (int j = 0; j < children.Count; j++)
+    {
+        Bullet bullet = children[j];
+        if (!bullet.IsAttached) continue;
+
+        bullet.Update(); // can remove from enemy.Children, spawn more, whatever
+    }
+}
+```
+
+**BAD EXAMPLES: Don't use it like this!**
+
+```csharp
+// no IsAttached check which leads to calling an Update() on a dead enemy.
+using PassSnapshot<Enemy> pass = new PassSnapshot<Enemy>(enemies);
+for (int i = 0; i < pass.Count; i++)
+    pass[i].Update();
+
+// forgetting using / Dispose, which causes the array never returns to the pool.
+PassSnapshot<Enemy> pass = new PassSnapshot<Enemy>(enemies); // leaked
+for (int i = 0; i < pass.Count; i++) { ... }
+
+// BAD: caching the struct and reusing it across frames -- it's a one-shot copy and it expires very quickly
+
+// BAD: relying on ordering to matter across mutations.
+// Items removed mid-pass are still in the snapshot, though ideally the loop would just skip them.
+// Don't assume "the list looks like X" after the pass. Only the real list does.
+```
+
+Rule of thumb:
+
+```csharp
+using PassSnapshot<T> pass = new PassSnapshot<T>(list);
+for (int i = 0; i < pass.Count; i++)
+{
+    T item = pass[i];
+    if (!item.IsAlive) continue;
+    item.DoTheThing();
+}
+```

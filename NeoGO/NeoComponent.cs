@@ -47,6 +47,15 @@ public abstract class NeoComponent
         set => _enabled = value;
     }
 
+    /// <summary>
+    /// True while this component is on an object that hasn't been destroyed. False after RemoveComponent, after the object is destroyed, and during OnDestroy.
+    /// </summary>
+    /// <remarks>The lifecycle loops check this before every callback so a component removed mid-pass is never called again in that pass.</remarks>
+    public bool IsAttached => _parentObj is { IsDestroyed: false } && !_detaching;
+
+    // set right before OnDestroy so lifecycle loops skip a component that is marked for destroy
+    internal bool _detaching;
+
     public bool HasRanOnStart = false;
 
     /// <summary>
