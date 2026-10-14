@@ -21,26 +21,23 @@ public class NeoButton : NeoUIElement
     public Color HoverColor { get; set; } = Color.LightGray;
     public Color PressedColor { get; set; } = Color.Gray;
 
-    /// <summary>True when the layout size comes from the measured text size. When false, Size controls layout.</summary>
-    public bool AutoSize { get; set; } = true;
+    public NeoButton()
+    {
+        ScreenTransform.WidthMode = NeoUISizing.Fit;
+        ScreenTransform.HeightMode = NeoUISizing.Fit;
+    }
 
-    /// <summary>True when the mouse cursor is inside this element's layout bounds this tick.</summary>
+    /// <summary>True when the mouse cursor is inside this element's bounds.</summary>
     public bool Hovered { get; private set; }
 
-    /// <summary>Fires on left-button release inside the element after a press that started in it.</summary>
+    /// <summary>Invokes on left-button release inside the element after a click.</summary>
     public Action? OnClick { get; set; }
 
-    protected override Vector2 MeasureSize() => AutoSize
-        ? (Font != null && !string.IsNullOrEmpty(Text) ? Font.MeasureString(Text) : Vector2.Zero)
-        : base.MeasureSize();
+    protected override Vector2 MeasureContent() => (Font != null && !string.IsNullOrEmpty(Text)) ? Font.MeasureString(Text) : Vector2.Zero;
 
     public override void OnUpdate(GameTime gameTime)
     {
-        Vector2 mouse = Input.MousePosition;
-        bool over = mouse.X >= LayoutPosition.X &&
-                    mouse.X <= LayoutPosition.X + LayoutSize.X &&
-                    mouse.Y >= LayoutPosition.Y && 
-                    mouse.Y <= LayoutPosition.Y + LayoutSize.Y;
+        bool over = ContainsScreenPoint(Input.MousePosition);
         Hovered = over;
 
         if (over && Input.LeftMouseButton.IsPressed()) _pressedOver = true;
@@ -61,6 +58,6 @@ public class NeoButton : NeoUIElement
         if (Hovered) color = Input.LeftMouseButton.IsDown() ? PressedColor : HoverColor;
 
         Vector2 size = Font.MeasureString(Text);
-        spriteBatch.DrawString(Font, Text, LayoutPosition + LayoutSize / 2f, color, 0f, size / 2f, Vector2.One, SpriteEffects.None, 0f);
+        spriteBatch.DrawString(Font, Text, ScreenTransform.LayoutPosition + ScreenTransform.LayoutSize / 2f, color, 0f, size / 2f, Vector2.One, SpriteEffects.None, 0f);
     }
 }

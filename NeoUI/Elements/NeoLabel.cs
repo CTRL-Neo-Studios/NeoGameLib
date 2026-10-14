@@ -8,19 +8,29 @@ public class NeoLabel : NeoUIElement
     public SpriteFont? Font { get; set; }
     public string Text { get; set; } = "";
     public Color Color { get; set; } = Color.White;
-
     /// <summary>
-    /// Defaults to the font's measured text size.
+    /// tries to fit on both axes by default via the measured text size. Set the size mode to Fixed to make Size attr come to effect instead.
     /// </summary>
-    public bool AutoSize { get; set; } = true;
+    /// <remarks>Text still draws at its native size without wrapping, scaling, or clipping.</remarks>
+    public NeoLabel()
+    {
+        ScreenTransform.WidthMode = NeoUISizing.Fit;
+        ScreenTransform.HeightMode = NeoUISizing.Fit;
+    }
 
-    protected override Vector2 MeasureSize() => AutoSize ? (
-            (Font != null && !string.IsNullOrEmpty(Text)) ? Font.MeasureString(Text) : Vector2.Zero
-        ) : base.MeasureSize();
+    protected override Vector2 MeasureContent() => (Font != null && !string.IsNullOrEmpty(Text)) ? 
+        Font.MeasureString(Text) : Vector2.Zero;
 
     protected override void OnDraw(SpriteBatch spriteBatch)
     {
         if (Font != null && !string.IsNullOrEmpty(Text))
-            spriteBatch.DrawString(Font, Text, LayoutPosition, Color);
+        {
+            spriteBatch.DrawString(
+                Font, 
+                Text, 
+                ScreenTransform.LayoutPosition, 
+                Color
+            );
+        }
     }
 }

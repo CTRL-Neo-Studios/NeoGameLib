@@ -1,3 +1,4 @@
+using System;
 using NeoGameLib.Common;
 using NeoGameLib.NeoCollision;
 using NeoGameLib.NeoGO;
@@ -30,6 +31,28 @@ public class NeoGame : Game
     private WorldManager _worldManager;
     private AssetManager _assetManager;
     private Point _windowedSize;
+    private float? _viewportAspect;
+
+    /// <summary>
+    /// The width / height ratio the game viewport keeps, e.g. 16f / 9f. Null (as default) fills the whole window.
+    /// </summary>
+    /// <remarks>
+    /// <para>The viewport is basically the largest rectangle with this ratio that can fit the window center. The rest of the window renders LetterboxColor.</para>
+    /// <para>Cameras, sprites, UI canvases and OnDraw/OnDrawUI all work inside the viewport. Input.MousePosition stays in window pixels</para>
+    /// </remarks>
+    public float? ViewportAspect
+    {
+        get => _viewportAspect;
+        set => _viewportAspect = value is null || (float.IsFinite(value.Value) && value.Value > 0)
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(value), "the viewport aspect must be positive and finite");
+    }
+
+    /// <summary>The color of the bars outside the viewport when ViewportAspect is set.</summary>
+    public Color LetterboxColor { get; set; } = Color.Black;
+
+    /// <summary>The color the viewport is cleared to every frame.</summary>
+    public Color ClearColor { get; set; } = Color.CornflowerBlue;
 
     public static NeoGame? Singleton { get; private set; }
 
@@ -83,7 +106,8 @@ public class NeoGame : Game
         base.Update(gameTime);
         Input.EnsureRegistered(); // input maps must exist before the bus refreshes in order for the buttons to get the state of the same frame
         InputBus.Update(); // input lifecycle runs first so everything collected will be accessible by lifecycles below
-        UIBus.Update(gameTime, new Point(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height)); // ui runs before gameplay so screen-space logic reads the latest input and layout
+        ApplyViewport();
+        UIBus.Update(gameTime, GraphicsDevice.Viewport.Bounds); // ui runs before gameplay so screen-space logic reads the latest input and layout
         OnUpdate(gameTime);
         WorldManager.Update(gameTime);
         ColliderBus.Update();
@@ -92,18 +116,37 @@ public class NeoGame : Game
 
     protected sealed override void Draw(GameTime gameTime)
     {
-        GraphicsDevice.Clear(Color.CornflowerBlue);
+        // viewport clearing pass: whole window clears with letterbox color, then the viewport area clears with viewport clear color.
+        GraphicsDevice.Viewport = new Viewport(0, 0, GraphicsDevice.PresentationParameters.BackBufferWidth, GraphicsDevice.PresentationParameters.BackBufferHeight);
+        GraphicsDevice.Clear(LetterboxColor);
+        ApplyViewport();
+        if (_viewportAspect is null)
+        {
+            GraphicsDevice.Clear(ClearColor);
+        }
+        else
+        {
+            // ponytail: MonoGame's Clear ignores the viewport on some backends, so the viewport is filled with a quad
+            _spriteBatch.Begin();
+            _spriteBatch.Draw(_uiBus.GetWhitePixel(GraphicsDevice), Vector2.Zero, null, ClearColor, 0, Vector2.Zero,
+                new Vector2(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height), SpriteEffects.None, 0);
+            _spriteBatch.End();
+        }
 
         // world pass: one batch per enabled camera, stacked in Order. with no enabled camera the pass falls back to identity, the pre-camera behavior
         if (RenderBus.HasAnyCamera)
         {
-            foreach (NeoCamera camera in RenderBus.Cameras)
+            // snapshot (see PassSnapshot): OnDraw and render features can destroy cameras or change their Order -- which re-sorts the live list
+            NeoCamera main = RenderBus.MainCamera;
+            using PassSnapshot<NeoCamera> cameras = new(RenderBus.Cameras);
+            for (int i = 0; i < cameras.Count; i++)
             {
-                if (!camera.Enabled) continue;
+                NeoCamera camera = cameras[i];
+                if (!camera.IsAttached || !camera.Enabled) continue;
 
                 _spriteBatch.Begin(transformMatrix: camera.GetViewMatrix(GraphicsDevice.Viewport));
                 RenderBus.Draw(_spriteBatch, camera);
-                if (ReferenceEquals(camera, RenderBus.MainCamera)) OnDraw(_spriteBatch, gameTime);
+                if (ReferenceEquals(camera, main)) OnDraw(_spriteBatch, gameTime);
                 _spriteBatch.End();
             }
         }
@@ -115,9 +158,9 @@ public class NeoGame : Game
             _spriteBatch.End();
         }
 
-        // screen-space pass: identity matrix, always on top of the world
-        _spriteBatch.Begin();
+        // screen-space pass: the UI bus begins and ends one batch per canvas (scaled by the canvas), only then OnDrawUI gets its own identity batch which allows it to be always on top of the world and the canvases
         UIBus.Draw(_spriteBatch);
+        _spriteBatch.Begin();
         OnDrawUI(_spriteBatch, gameTime);
         _spriteBatch.End();
 
@@ -128,6 +171,29 @@ public class NeoGame : Game
     {
         return new Vector2(GraphicsDevice.Viewport.Width / 2f, GraphicsDevice.Viewport.Height / 2f);
     }
+
+    /// <summary>The window-pixel rectangle that the game draws into, as in the letterboxed ViewportAspect area.</summary>
+    public Rectangle ViewportBounds
+    {
+        get
+        {
+            int width = GraphicsDevice.PresentationParameters.BackBufferWidth;
+            int height = GraphicsDevice.PresentationParameters.BackBufferHeight;
+            if (_viewportAspect is not float aspect || width <= 0 || height <= 0) return new Rectangle(0, 0, width, height);
+
+            // widest box that fits: full width when the window is taller than the aspect, full height otherwise
+            int w = width, h = (int)MathF.Round(width / aspect);
+            if (h > height)
+            {
+                h = height;
+                w = (int)MathF.Round(height * aspect);
+            }
+            return new Rectangle((width - w) / 2, (height - h) / 2, w, h);
+        }
+    }
+
+    // sets on every update and draw due to MonoGame resetting the viewport to the full back buffer when the window resizes
+    private void ApplyViewport() => GraphicsDevice.Viewport = new Viewport(ViewportBounds);
 
     /// <summary>The mode from the last SetWindowMode call. The game starts in Windowed by default.</summary>
     public NeoWindowMode WindowMode { get; private set; } = NeoWindowMode.Windowed;
@@ -140,7 +206,7 @@ public class NeoGame : Game
     /// </remarks>
     public void SetWindowMode(NeoWindowMode mode)
     {
-        if (mode == NeoWindowMode.BorderlessFullscreen && System.OperatingSystem.IsMacOS())
+        if (mode == NeoWindowMode.BorderlessFullscreen && OperatingSystem.IsMacOS())
             mode = NeoWindowMode.Fullscreen;
 
         if (mode == WindowMode) return;
@@ -190,15 +256,12 @@ public class NeoGame : Game
     protected virtual void OnDraw(SpriteBatch spriteBatch, GameTime gameTime) { }
 
     /// <summary>
-    /// this is the screen-space equivalent of OnDraw and it runs after all canvases with an identity matrix, so anything drawn here does not take the camera into account.
+    /// this is the screen-space equivalent of OnDraw and it runs after all canvases in window pixels with an identity matrix, so it ignores the camera and the canvas scale.
     /// </summary>
     /// <remarks>See instructions.md 0.3.0 Actual Implementation section beginning for more info.</remarks>
     protected virtual void OnDrawUI(SpriteBatch spriteBatch, GameTime gameTime) { }
 }
 
-// note to future self:
-// inherit from NeoGame<T> instead of NeoGame when you want a custom singleton with custom public fields you define in your base game class, i.e. public class Game1 : NeoGame<Game1> { }
-// this would make Game1.Singleton and show Game1's own public fields and etc.
 public class NeoGame<T> : NeoGame where T : NeoGame<T>
 {
     public new static T Singleton => (T)NeoGame.Singleton;

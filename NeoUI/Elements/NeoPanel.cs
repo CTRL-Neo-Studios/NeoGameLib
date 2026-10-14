@@ -7,17 +7,30 @@ public class NeoPanel : NeoUIElement
 {
     public Color Color { get; set; } = Color.White;
 
+    public NeoPadding Padding { get; set; }
+
+    private protected override NeoPadding ContentPadding => Padding;
+
     protected override void OnDraw(SpriteBatch spriteBatch)
     {
-        if (LayoutSize.X <= 0 || LayoutSize.Y <= 0) return;
-        NeoUIElement root = this;
+        Vector2 size = ScreenTransform.LayoutSize;
+        if (
+            size.X <= 0 || 
+            size.Y <= 0 || 
+            Color.A == 0 || 
+            Canvas is not { Bus: not null } canvas
+        ) return;
         
-        while (root.Parent != null)
-        {
-            root = root.Parent;
-        }
-        
-        if (root is not NeoCanvas canvas || canvas.Bus == null) return;
-        spriteBatch.Draw(canvas.Bus.GetWhitePixel(spriteBatch.GraphicsDevice), LayoutPosition, null, Color, 0, Vector2.Zero, LayoutSize, SpriteEffects.None, 0);
+        spriteBatch.Draw(
+            canvas.Bus.GetWhitePixel(spriteBatch.GraphicsDevice), 
+            ScreenTransform.LayoutPosition, 
+            null, 
+            Color, 
+            0, 
+            Vector2.Zero, 
+            size, 
+            SpriteEffects.None, 
+            0
+        );
     }
 }
