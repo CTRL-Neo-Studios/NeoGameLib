@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using NeoGameLib.Common;
 using NeoGameLib.NeoRendering;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
@@ -80,34 +81,49 @@ public class NeoWorld
     
     public void Destroy(NeoObject obj)
     {
-        if (obj is null || obj.IsDestroyed || obj.World != this)
+        if (obj is null || obj.IsDestroyed || obj.World != this || _objectDestroyQueue.Contains(obj))
             return;
         _objectDestroyQueue.Add(obj);
     }
 
     public void Update(GameTime gameTime)
     {
-        for (int i = 0; i < _objects.Count; i++)
-            _objects[i].Tick(gameTime);
-
-        if (_objectDestroyQueue.Count <= 0) return;
-        
-        foreach (NeoObject obj in _objectDestroyQueue)
+        // snapshot (see PassSnapshot): objects spawned during the tick start ticking next frame, destroyed ones skip themselves in the tick
+        using (PassSnapshot<NeoObject> objects = new(_objects))
         {
+            for (int i = 0; i < objects.Count; i++)
+                objects[i].Tick(gameTime);
+        }
+
+        FlushDestroyQueue();
+    }
+
+    // note to self:
+    // OnDestroy can queue more objects, so this drains until the queue stays empty instead of an iterating-foreach a list that grows under it
+    private void FlushDestroyQueue()
+    {
+        for (int i = 0; i < _objectDestroyQueue.Count; i++)
+        {
+            NeoObject obj = _objectDestroyQueue[i];
             _objects.Remove(obj);
             obj.DestroyImmediate();
         }
         _objectDestroyQueue.Clear();
     }
-    
+
     // note to future self:
     // destroys all objects immediately and therefore invokes OnDestroy() on all components and unregisters themselves from the event buses.
+    // OnDestroy can spawn objects into this world (drops, effects...), so it repeats until a round destroys nothing new: the world is always empty afterwards
     public void Clear()
     {
-        foreach (NeoObject obj in _objects)
-            obj.DestroyImmediate();
-
-        _objects.Clear();
+        while (_objects.Count > 0)
+        {
+            using PassSnapshot<NeoObject> objects = new(_objects);
+            _objects.Clear();
+            _objectDestroyQueue.Clear();
+            for (int i = 0; i < objects.Count; i++)
+                objects[i].DestroyImmediate();
+        }
         _objectDestroyQueue.Clear();
     }
 
