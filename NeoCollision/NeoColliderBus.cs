@@ -11,27 +11,22 @@ namespace NeoGameLib.NeoCollision;
 //
 // detection is basically a O(n^2) pairing double-iter-loop with every collider tested against every other once per frame.
 // bounds are cached once per frame so a pair test is just calling the Rectangle.Intersect func.
-// TODO: to future self you should optimize this double-iter-loop later but for the current complexity of projects it'll do
 //
 // collisions now calls every other component that implements the ICollision interface on BOTH objects of the pair.
 // In reaction to the world-load-unload architecture change, a world collision-group gate now runs before the interface calls: only the worlds in the same group (or worlds in the ungrouped section) can collide with each other
-// For this part of the explanation you're better off checking out instructions.md, i don't want to copy-paste architecture explanations everywhere
 //
-// also TODO for future features to impl: enter/stay/exit tracking, CCD
-// enter/stay/exit is basically like 40-ish lines of diffing a HashSet of active pairs, you can add it ONLY when a damage system needs to fire once per contact and not every frame
-//
-// note to future self:
-// OnCollision is user code and can do ANYTHING mid-pass: destroy objects, remove colliders, unload/load worlds.
-// so the pass runs over a snapshot (see PassSnapshot) with bounds and groups cached at the start:
-// - a collider removed/destroyed mid-pass gets no more callbacks this pass, and no pair is reported with stale indices
-// - a collider added mid-pass (e.g. a world loaded from a callback) starts colliding next pass
-// - Collisions only holds pairs whose callbacks actually runs
+// enter/stay/exit: the bus diffs this frame's overlapping pairs against last frame's set.
+// a pair that appears will fire OnCollisionEnter on both sides. if it stays then OnCollision is fired constantly
+// a pair that disappears will fire OnCollisionExit on whichever side that is still attached (since by the time this was iterated a side may've been already destroyed or the world's unloaded). the same survivor-gets-the-call logic applies to the exit callback.
 public class NeoColliderBus : NeoBus<NeoBoxCollider>
 {
     private WorldManager _worldManager;
     private List<NeoCollision> _collisions = new();
     private Rectangle[] _bounds = new Rectangle[0];
     private int[] _groups = new int[0];
+
+    private HashSet<ColliderPair> _active = new(); // overlapping pairs in last frame
+    private HashSet<ColliderPair> _next = new(); // overlapping pairs in this frame
 
     public List<NeoCollision> Collisions => _collisions;
 
@@ -75,7 +70,6 @@ public class NeoColliderBus : NeoBus<NeoBoxCollider>
             {
                 if (!_bounds[i].Intersects(_bounds[j])) continue;
 
-                // world gate: same group proceeds while -1 or differently gated groups are skipped (-1 means ungrouped)
                 // same group runs the check, different groups does not run the check, -1 and other groups does not run the check
                 if (_groups[i] != _groups[j] && (_groups[i] >= 0 || _groups[j] >= 0)) continue; // if group gates are different and that groups aren't ungrouped, skip
 
@@ -87,23 +81,65 @@ public class NeoColliderBus : NeoBus<NeoBoxCollider>
 
                 NeoCollision col = new(a, b, Rectangle.Intersect(_bounds[i], _bounds[j]));
                 _collisions.Add(col);
+                
+                ColliderPair pair = new(a, b);
+                bool entered = _next.Add(pair) && !_active.Contains(pair);
 
-                NotifyHandlers(a, b, col); // calling ICollision interfaces on object A
-                if (a.IsAttached && b.IsAttached) NotifyHandlers(b, a, col); // calling ICollision interfaces on object B
+                Notify(a, b, col, entered ? CollisionPhase.Enter : CollisionPhase.Stay);
+                Notify(b, a, col, entered ? CollisionPhase.Enter : CollisionPhase.Stay);
             }
         }
 
+        // a pair that disappeared in this frame fires exit on whichever side still exists.
+        // a collider that was destroyed/marked-for-destruction mid-overlap exit on whichever side still exists a frame later
+        foreach (ColliderPair pair in _active)
+        {
+            if (_next.Contains(pair)) continue;
+
+            if (pair.A.IsAttached) NotifyExit(pair.A, pair.B);
+            if (pair.B.IsAttached) NotifyExit(pair.B, pair.A);
+        }
+
+        _active.Clear();
+        (_active, _next) = (_next, _active);
         return _collisions;
     }
 
-    private static void NotifyHandlers(NeoBoxCollider self, NeoBoxCollider other, NeoCollision col)
+    private static void Notify(NeoBoxCollider self, NeoBoxCollider other, NeoCollision col, CollisionPhase phase)
     {
+        if (!self.IsAttached || !other.IsAttached) return;
+
+        if (phase == CollisionPhase.Enter) self.OnPairEnter(other, col);
+        else self.OnPairStay(other, col);
+
         using PassSnapshot<NeoComponent> components = new(self.ParentObject.Components);
         for (int k = 0; k < components.Count; k++)
         {
             if (!self.IsAttached || !other.IsAttached) return;
             NeoComponent c = components[k];
-            if (c.IsAttached && c.Enabled && c is ICollision handler) handler.OnCollision(other, col);
+            if (!c.IsAttached || !c.Enabled || c is not ICollision handler) continue;
+
+            if (phase == CollisionPhase.Enter) handler.OnCollisionEnter(other, col);
+            else handler.OnCollision(other, col);
         }
+    }
+
+    private static void NotifyExit(NeoBoxCollider self, NeoBoxCollider other)
+    {
+        self.OnPairExit(other);
+
+        using PassSnapshot<NeoComponent> components = new(self.ParentObject.Components);
+        for (int k = 0; k < components.Count; k++)
+        {
+            if (!self.IsAttached) return;
+            NeoComponent c = components[k];
+            if (c.IsAttached && c.Enabled && c is ICollision handler) handler.OnCollisionExit(other);
+        }
+    }
+
+    private enum CollisionPhase
+    {
+        Enter,
+        Stay,
     }
 }
