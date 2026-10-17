@@ -170,6 +170,27 @@ public class NeoWorld
         return obj is not null;
     }
 
+    public NeoObject? FindObjectByTag(string tag)
+    {
+        foreach (NeoObject obj in _objects)
+        {
+            if (obj.Tags.Contains(tag)) return obj;
+        }
+
+        return null;
+    }
+
+    public List<NeoObject> FindObjectsByTag(string tag)
+    {
+        List<NeoObject> list = new();
+        foreach (NeoObject obj in _objects)
+        {
+            if (obj.Tags.Contains(tag)) list.Add(obj);
+        }
+
+        return list;
+    }
+
     // note to self:
     // exact case-sensitive name match, first occurrence only
     public NeoObject? FindObjectByName(string name)

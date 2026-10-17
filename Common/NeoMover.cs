@@ -50,7 +50,15 @@ public class NeoMover : NeoComponent
 
     public override void OnAwake()
     {
-        _collider = ParentObject.GetComponent<NeoBoxCollider>();
+        // pick the first SOLID (non-trigger) collider
+        foreach (NeoComponent component in ParentObject.Components)
+        {
+            if (component is NeoBoxCollider collider && !collider.IsTrigger)
+            {
+                _collider = collider;
+                break;
+            }
+        }
     }
 
     public void AddToWhitelist<T>() where T : NeoComponent { CollisionWhitelist.Add(typeof(T)); }
@@ -119,7 +127,7 @@ public class NeoMover : NeoComponent
                 foreach (NeoCollisionData col in collisions)
                 {
                     NeoBoxCollider other = col.A == _collider ? col.B : col.B == _collider ? col.A : null;
-                    if (other is null) continue;
+                    if (other is null || other.IsTrigger) continue;
                     if (!HasGroundTag(other.ParentObject)) continue;
 
                     Grounded = true;
@@ -161,7 +169,7 @@ public class NeoMover : NeoComponent
             // if the other collider is this one, or other collider is disabled,
             // OR other component is a "hanging" component whose parent object does not exist in the world,
             // OR a object with a collider that this can pass through, skip
-            if (other == _collider || !other.Enabled || other.ParentObject is null || CanPassThrough(other.ParentObject)) continue;
+            if (other == _collider || !other.Enabled || other.IsTrigger || other.ParentObject is null || CanPassThrough(other.ParentObject)) continue;
             
             Rectangle overlap = Rectangle.Intersect(_collider.Bounds, other.Bounds);
             if (overlap.IsEmpty) continue; // skip if there's no overlap
