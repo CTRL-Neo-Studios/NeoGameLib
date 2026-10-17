@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using NeoGameLib.NeoGO;
 using NeoGameLib.NeoMapping;
 using Microsoft.Xna.Framework;
+using NeoGameLib.NeoMapping.DurableActions;
+using NeoGameLib.NeoMapping.DurableActions.Context;
 
 namespace NeoGameLib.NeoCollision;
 
