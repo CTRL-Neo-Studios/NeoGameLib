@@ -807,3 +807,156 @@ for (int i = 0; i < pass.Count; i++)
     item.DoTheThing();
 }
 ```
+
+---
+
+# Road to 0.4.0 - NeoMap, Data-Driven Scenes, Animation State Machines
+
+This is a huge upgrade from my previous GridMapperComponent.cs which acted more as a makeshift rather than a scalable solution.
+
+The issues with the previous implementation: 
+- relied heavily on hardcoded logic for each tiles
+- each tile that has a collider is an individual collider; collider calculations aren't merged so that makes for inefficient collider passes
+- I can't move this from project to project forever. Most of the logic had to be rewritten if I wanted to add something to the generation mechanics, and even the generation logic was patched up with glue.
+- Editing files by hand were slow. Especially when maps get SUPER LARGE.
+
+So I wanted the new "grid mapper" to do these things:
+1. I can move files to other places and have them work without needing to implement the same function-mapping shit
+2. maps have a format that is extensible, and that these files actually dictates what the tiles does, instead of me hardcoding tile behaviour
+3. colliders are grouped for pass efficiency
+4. a map editor (WIP, check out [NeoMap Editor made using Nuxt v4 + Tauri v2](https://github.com/CTRL-Neo-Studios/neomap-editor))
+
+How do you make custom tile behaviour and store that on a file? Obviously I couldn't store actual code since that poses an actual cybersecurity issue, and also I have no clue how to do that. I did have some clue, however, in making CLIs with C# & Typescript.
+
+What would be the representation of a custom function in a file? An "id" that corresponds to a "function" that holds the same "id" in the code. That way, I only need to copy the standalone function when moving maps to other projects. Having data map to actual logic and having that data structure be extensible enough to allow mutations in the data structure is hard;
+but luckily i found json-schema.org and things had worked out. In fact, I've worked on something similar a year before, where I wanted to make a graphical programming tool that runs nodes-as-functions through the software I'm making across platforms, while having the blocks be self-correcting-according-to-signature and store custom logic. I hardcoded a schema of nodes with different functions and mapped them to corresponding runtime functions in the software.
+
+So let's call these little packets of data that contains references to actual logic in the code as "specifications", or "specs" for short. Then I thought about prefab tiles, tiles that has specs already assigned on them, as well as a registry that contains mapping from specs to actual runtime code parts; and, with that, a layered map that holds tiles and prefabs. Sets of prefabs.
+
+Now we're storing everything in JSON. These maps includes layers of stuff on a grid, including:
+- prefabs
+- merged colliders
+- free-placed objects
+- tags
+- collider triggers
+
+which all run data-driven actions. the file describes WHAT is where; the code dictates what the WHAT does.
+
+This solves per-tile hardcoding and per-map code, since you can just copy and paste the schema, types, prefabs, and maps from one object to another.
+
+## [0.4.0] File layout
+
+everything is stored in the `Data/` folder in the project root. the NuGet package's build targets creates the folders and generate the schema on every build and copies the maps + prefab libraries next to the build output to let the game read them in runtime.
+
+```
+Data/
+  neo.project.json -> editor/tool entry point that holds schema name, content root. I forsee this file having potential of being a brief representation of references of the project's persisted file data-to-code stuff, like fingerprints of a project, so this is extensible.
+  <Game>.neoschema.json -> generated JSON Schema, ONE per game. the reason I didn't go for multi-schema is because... there's no need. One schema holds shapes of specs and multiple schemas would mean a nightmare in finding them, generating them, reading them, doing all sorts of logic with more than one schema file... augh
+  NeoMaps/level1.neomap.json -> levels
+  NeoPrefabs/common.neoprefabs.json -> prefab & collider libraries
+```
+
+the schema regenerates on every build and ideally it's editor-only. the game's job is to validate the maps against the code.
+
+## [0.4.0] Specs: authoring data
+
+In a better way of putting this (trying to straighten your mind in 2am is hard): a "spec" is a small authoring-data-type that adds components to an object when building a map. they're discovered automatically by the game in that any public non-abstract `INeoSpec` type in the game assembly (or an assembly it references) is accounted for, w/o registration calls. the name of the spec-implemented class is the resulting typing name, or you can use the attribute `[NeoName("Door")]` for a more stable one in case of class name changes; duplicate names will throw an error (You've been warned).
+the spec's constructor params ARE its schema
+
+```csharp [InsideYourGame.cs]
+public sealed record DoorSpec([property: NeoAsset(typeof(Texture2D))] string Texture, string Level = "level1") : INeoSpec
+{
+    public void Apply(NeoObject target)
+    {
+        target.AddComponent(new NeoSpriteRenderer(NeoGame.Singleton.RenderBus, NeoGame.Singleton.Assets.Load<Texture2D>(Texture)));
+        target.AddComponent(new Door { Level = Level });
+    }
+}
+```
+
+the library ships `SpriteSpec`, `TextSpec`, `BoxColliderSpec` (Size required, Offset/IsTrigger optional), `SpriteColliderSpec`, `CameraSpec` and `TriggerSpec` (below). prefer records over classes-with-setters: property-initializer defaults on a plain class don't survive into the schema.
+
+- missing properties fall back to constructor defaults; unknown properties THROW (typos fail loudly); on net9, params without a default are required. on net8 they quietly become null, so if you care, target net9.
+- unknown members in files throw too, matching the strict schema. MonoGame structs serialize as `{ "x": .., "y": .. }`.
+
+## [0.4.0] Prefab libraries
+
+```json
+{
+  "prefabs": {
+    "floor": { "specs": [ { "type": "SpriteSpec", "properties": { "texture": "Sprites/floor", "depth": 1 } } ] },
+    "wall":  { "tags": [ "solid" ], "collider": "walls",
+               "specs": [ { "type": "SpriteSpec", "properties": { "texture": "Sprites/wall" } } ] },
+    "door":  { "tags": [ "door" ], "specs": [ { "type": "TriggerSpec", "properties": {
+                 "size": { "x": 32, "y": 32 }, "tag": "Player",
+                 "onEnter": [ { "type": "UnloadWorldAction" }, { "type": "LoadWorldAction", "properties": { "world": "level2" } } ] } } ] }
+  },
+  "colliders": {
+    "walls": { "tags": [ "solid" ] }
+  }
+}
+```
+
+- a prefab is tags + a spec list + an optional `collider` group name. specs apply in order; an entry's `id` names it for per-object overrides.
+- a prefab whose cells reference a collider group get merged into as few rectangles as possible, one `NeoBoxCollider` each (auto-added), and the group's specs land on each merged collider object -- that's where tags like `solid` go. group cells merge across layers. a group used by a prefab but missing from `colliders` throws.
+- the library file itself: `{ "prefabs": { ... }, "colliders": { ... } }`.
+
+## [0.4.0] Maps
+
+```json
+{
+  "cellSize": { "x": 32, "y": 32 },
+  "prefabs": [ "common" ],
+  "layers": [
+    { "name": "ground", "legend": { ".": "floor", "#": "wall" }, "rows": [ "###", "#.#", "###" ] }
+  ],
+  "objects": [
+    { "name": "spawn", "tags": [ "spawn" ] },
+    { "name": "Door-A", "prefab": "door", "position": { "x": 96, "y": 96 },
+      "overrides": { "TriggerSpec": { "world": "level3" } } }
+  ]
+}
+```
+
+- layers stack in array order; a legend character maps to a prefab, `null` to empty, keys must be one character, rows may be ragged.
+- an object inherits its prefab's tags + specs, adds its own on top (empty prefab ref = pure tag marker, e.g. spawnpoints). `overrides` merge into entries keyed by their `id` (or spec name without one), `null` clears the entry back to defaults, unknown keys throw.
+- runtime: `WorldManager.CreateWorld("level1", w => NeoMap.Load("level1").Build(w));`. `NeoMap.LoadWorld("level1")` registers + loads a world from its same-named map in one call, which is what `LoadWorldAction` uses when the world isn't registered yet. building never mutates the map, so one `NeoMap` can build any number of worlds. `NeoMap.FromJson` / `ToJson` exist for editors.
+
+## [0.4.0] Tags
+
+`NeoObject.Tags` is a set of strings, set from data (prefab/object/collider-group `tags`) or code. triggers filter by them, and `World.FindObjectByTag("spawn")` / `FindObjectsByTag` query them. tags replace component-marker classes (`GroundTag` style): if you still use the mover's `GroundComponentType`, it still works, but tags are the intended way forward.
+
+## [0.4.0] Triggers and actions
+
+every collider has enter/stay/exit events now: the collision bus diffs this frame's overlapping pairs against last frame's and fires `OnCollisionEnter` (both sides), then `OnCollision` every frame, then `OnCollisionExit` on whichever side still exists -- so a player destroyed while inside a trigger still gets the exit delivered to the trigger. `OnCollisionEnter`/`Exit` are default interface methods, so existing `ICollision` components compile unchanged.
+
+`NeoTrigger` is a `NeoBoxCollider` with `IsTrigger = true` (the mover ignores triggers: no push-out, no grounding) that fires action lists when a matching object enters, stays in, or exits its bounds. the tag filter is `null` = anything.
+
+an action is the same idea as a spec, but for behaviour: `INeoAction` types, discovered automatically, stored in map files as `{ "type": ..., "properties": ... }` lists. built-ins:
+
+- `LoadWorldAction { world, unloadCurrent = true }` -- registers from the same-named map if needed
+- `UnloadWorldAction { world = null }` -- null = the trigger's own world
+- `DestroyAction { target = "self" | "other" }` -- queues the destroy for end of tick
+- `SetEnabledAction { component, enabled = true, target = "self" }` -- matches a component by class name
+
+game-defined actions: `public sealed record SaveGameAction(string Slot) : INeoAction { public void Invoke(NeoActionContext ctx) { ... } }`. `ctx.Self` is the trigger's object, `ctx.Other` the overlapping one. actions run during the collision pass, so loading worlds / destroying objects mid-callback is safe (same guarantee as any collision callback).
+
+a door is now data, not code: sprite + `TriggerSpec` + unload/load actions. actions compose into lists, and `OnStay` exists for things like damage-over-time zones.
+
+## [0.4.0] Schema for editors
+
+`<Game>.neoschema.json` is a JSON Schema that follows the latest json-schema.org specifications. this specification applies to every spec and action under `$defs` (`spec:SpriteSpec`, `action:LoadWorldAction`) and the full `NeoMap`, `NeoPrefabLibrary` and `NeoProject` file shapes with `required`, `default`, enums-as-strings and `additionalProperties: false` (typos fail in the editor).
+Ideally, the map editor software loads the file, validates the json schema, and renders the properties panel from the definitions.
+
+## [0.4.0] What data still can't do
+
+While specs/actions holds data that describes behaviour and allows reconstruction of that behaviour type to use the functions that exists in code, they can't hold actual behaviour. For example, if a want a tile that when "stepped on it and it'll shake the camera" is still a component somebody has to write in their monogame project alongside with a spec that attaches to it. the only way past that is an embedded scripting language, which I DO NOT INTEND IMPLEMENTING.
+
+I find it interesting that no matter whatever the fuck library it is that I'm writing, there always comes to a point where I need to implement my custom programming language that is runnable across devices. I hope there's a library that allows me to make a programming langauge, define its syntax, and does a one-command-build that gives me compiler with cross-platform abilities, and can be run through that library's runner with correct given configurations.
+
+COme to think of it... I might make it sometime. Or just use typescript lmao
+
+also, a batched per-layer tilemap renderer needs to be implemented in the future for better rendering performance since rn each tile is one neosprite pass.
+
+---
+
