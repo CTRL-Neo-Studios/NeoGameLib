@@ -41,7 +41,9 @@ public static class NeoRegistry
             new TypedEntryConverter<INeoSpec>(),
             new TypedEntryConverter<INeoAction>(),
         },
+#if NET9_0_OR_GREATER
         RespectRequiredConstructorParameters = true,
+#endif
     };
 
     static NeoRegistry()
