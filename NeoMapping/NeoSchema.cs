@@ -116,6 +116,17 @@ public static class NeoSchema
                 };
             }
 
+            // no nullable-reference annotations: every reference-type member accepts null at runtime,
+            // so its schema must too (legend values are `string | null`, prefab lists may be absent/null, ...)
+            JsonObject body = BuildTypeSchema(type);
+            return type.IsValueType ? body : new JsonObject
+            {
+                ["anyOf"] = new JsonArray(body, new JsonObject { ["type"] = "null" }),
+            };
+        }
+
+        private JsonObject BuildTypeSchema(Type type)
+        {
             if (type == typeof(string)) return new JsonObject { ["type"] = "string" };
             if (type == typeof(bool)) return new JsonObject { ["type"] = "boolean" };
             if (type == typeof(int) || type == typeof(long) || type == typeof(short) || type == typeof(byte) ||

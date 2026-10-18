@@ -320,7 +320,7 @@ public sealed class NeoMap
             if (overrides is not null && overrides.ContainsKey(key))
             {
                 consumed.Add(key);
-                if (overrides[key] is JsonObject over) props = Merge(props, over);
+                props = (overrides[key] is JsonObject over) ? Merge(props, over) : new JsonObject();
             }
 
             try

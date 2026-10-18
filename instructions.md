@@ -889,7 +889,7 @@ the library ships `SpriteSpec`, `TextSpec`, `BoxColliderSpec` (Size required, Of
                "specs": [ { "type": "SpriteSpec", "properties": { "texture": "Sprites/wall" } } ] },
     "door":  { "tags": [ "door" ], "specs": [ { "type": "TriggerSpec", "properties": {
                  "size": { "x": 32, "y": 32 }, "tag": "Player",
-                 "onEnter": [ { "type": "UnloadWorldAction" }, { "type": "LoadWorldAction", "properties": { "world": "level2" } } ] } } ] }
+                 "onEnter": [ { "type": "SwitchWorldAction", "properties": { "world": "level2" } } ] } } ] }
   },
   "colliders": {
     "walls": { "tags": [ "solid" ] }
@@ -913,14 +913,15 @@ the library ships `SpriteSpec`, `TextSpec`, `BoxColliderSpec` (Size required, Of
   "objects": [
     { "name": "spawn", "tags": [ "spawn" ] },
     { "name": "Door-A", "prefab": "door", "position": { "x": 96, "y": 96 },
-      "overrides": { "TriggerSpec": { "world": "level3" } } }
+      "overrides": { "TriggerSpec": { "onEnter": [ { "type": "SwitchWorldAction", "properties": { "world": "level3" } } ] } } }
   ]
 }
 ```
 
 - layers stack in array order; a legend character maps to a prefab, `null` to empty, keys must be one character, rows may be ragged.
-- an object inherits its prefab's tags + specs, adds its own on top (empty prefab ref = pure tag marker, e.g. spawnpoints). `overrides` merge into entries keyed by their `id` (or spec name without one), `null` clears the entry back to defaults, unknown keys throw.
-- runtime: `WorldManager.CreateWorld("level1", w => NeoMap.Load("level1").Build(w));`. `NeoMap.LoadWorld("level1")` registers + loads a world from its same-named map in one call, which is what `LoadWorldAction` uses when the world isn't registered yet. building never mutates the map, so one `NeoMap` can build any number of worlds. `NeoMap.FromJson` / `ToJson` exist for editors.
+- an object inherits its prefab's tags + specs, adds its own on top (empty prefab ref = pure tag marker, e.g. spawnpoints). `overrides` shallow-merge top-level properties into entries keyed by their `id` (or spec name without one) -- to change a nested action, replace the whole list as above. `null` resets the entry to spec defaults, unknown keys throw.
+- `SwitchWorldAction` unloads the trigger's own world before loading the target, which destroys the trigger, so any actions after it in the same list don't run. put it last.
+- runtime: `WorldManager.CreateWorld("level1", w => NeoMap.Load("level1").Build(w));`, or `NeoMap.RegisterWorld("level1", "level1")` for the same thing in one call, which is what `LoadWorldAction`/`SwitchWorldAction` use when the world isn't registered yet. building never mutates the map, so one `NeoMap` can build any number of worlds. `NeoMap.FromJson` / `ToJson` exist for editors.
 
 ## [0.4.0] Tags
 
@@ -934,7 +935,8 @@ every collider has enter/stay/exit events now: the collision bus diffs this fram
 
 an action is the same idea as a spec, but for behaviour: `INeoAction` types, discovered automatically, stored in map files as `{ "type": ..., "properties": ... }` lists. built-ins:
 
-- `LoadWorldAction { world, unloadCurrent = true }` -- registers from the same-named map if needed
+- `LoadWorldAction { world }` -- loads a world next to the running ones, never unloads anything. registers from the same-named map if needed
+- `SwitchWorldAction { world, unload = null }` -- unloads `unload` (null = the trigger's own world), then loads `world`. list `world` itself in `unload` to restart a level
 - `UnloadWorldAction { world = null }` -- null = the trigger's own world
 - `DestroyAction { target = "self" | "other" }` -- queues the destroy for end of tick
 - `SetEnabledAction { component, enabled = true, target = "self" }` -- matches a component by class name
