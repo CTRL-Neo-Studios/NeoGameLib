@@ -223,8 +223,10 @@ public sealed class NeoMap
          * [&][*][*][*][*][*]
          * [&][^][ ][ ]
          *
-         * ...then you get the idea.
+         * ...then you get the idea. It's efficient enough for now.
          */
+        
+        // TODO: improve efficiency of propogating collider groups ONLY when needed.
 
         foreach ((string groupName, bool[,] mask) in masks)
         {
