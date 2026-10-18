@@ -1,0 +1,24 @@
+<Project>
+
+  <PropertyGroup>
+    <NeoSchemaOnBuild Condition="'$(NeoSchemaOnBuild)' == ''">true</NeoSchemaOnBuild>
+    <!-- the game project directory; the tool creates/updates Data/ under it -->
+    <NeoProjectDir Condition="'$(NeoProjectDir)' == ''">$(MSBuildProjectDirectory)</NeoProjectDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- maps and prefab libraries are data, not content pipeline assets: copy them next to the build output -->
+    <None Remove="Data/NeoMaps/**" />
+    <None Remove="Data/NeoPrefabs/**" />
+    <Content Include="Data/NeoMaps/**;Data/NeoPrefabs/**" CopyToOutputDirectory="PreserveNewest" Pack="false" />
+  </ItemGroup>
+
+  <Target Name="NeoGenerateSchema" AfterTargets="Build"
+          Condition="'$(NeoSchemaOnBuild)' == 'true' and '$(OutputType)' != 'Library' and '$(TargetPath)' != ''">
+    <PropertyGroup>
+      <_NeoSchemaTool>$(MSBuildThisFileDirectory)..\tools\neo-schema.dll</_NeoSchemaTool>
+    </PropertyGroup>
+    <Exec Command="dotnet &quot;$(_NeoSchemaTool)&quot; &quot;$(TargetPath)&quot; &quot;$(NeoProjectDir)&quot;" />
+  </Target>
+
+</Project>

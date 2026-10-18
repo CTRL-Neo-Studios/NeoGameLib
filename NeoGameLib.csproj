@@ -34,6 +34,20 @@
   <ItemGroup>
     <Compile Remove="checks/**/*.cs" />
     <Compile Remove="samples/**/*.cs" />
+    <Compile Remove="tools/**/*.cs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Remove="build/NeoGameLib.targets" />
+    <None Include="build/NeoGameLib.targets" Pack="true" PackagePath="build/NeoGameLib.targets" />
   </ItemGroup>
+
+  <!-- publishes & bundles the schema tool -->
+  <Target Name="PackSchemaTool" BeforeTargets="_GetPackageFiles">
+    <PropertyGroup>
+      <_SchemaToolPublishDir>$(BaseIntermediateOutputPath)schema-tool</_SchemaToolPublishDir>
+    </PropertyGroup>
+    <Exec Command="dotnet publish &quot;$(MSBuildProjectDirectory)/tools/NeoGameLib.SchemaTool/NeoGameLib.SchemaTool.csproj&quot; -c $(Configuration) -o &quot;$(_SchemaToolPublishDir)&quot; --nologo -v q" />
+    <ItemGroup>
+      <None Include="$(_SchemaToolPublishDir)/**" Pack="true" PackagePath="tools/" Visible="false" />
+    </ItemGroup>
+  </Target>
 </Project>
