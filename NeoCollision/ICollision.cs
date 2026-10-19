@@ -9,4 +9,6 @@ public interface ICollision
 {
     // other = the collider on the opposing object; collision = the raw pair data
     void OnCollision(NeoBoxCollider other, NeoCollision collision);
+    void OnCollisionEnter(NeoBoxCollider other, NeoCollision collision) { }
+    void OnCollisionExit(NeoBoxCollider other) { }
 }

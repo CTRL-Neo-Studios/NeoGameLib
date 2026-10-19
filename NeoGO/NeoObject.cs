@@ -34,6 +34,8 @@ public class NeoObject
     }
     
     public List<NeoComponent> Components { get => _components; }
+    /// <summary>Free-form string case-sensitive labels as tags (e.g. "Player", "Enemy"). Used by triggers and map files (finally! string tags instead of component-as-tags)</summary>
+    public HashSet<string> Tags { get; } = new();
     public NeoWorld World { get; internal set; }
     public bool IsDestroyed { get; private set; }
 

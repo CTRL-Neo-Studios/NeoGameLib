@@ -1,8 +1,8 @@
 using System;
-using NeoGameLib.NeoGO;
 using Microsoft.Xna.Framework;
+using NeoGameLib.NeoGO;
 
-namespace NeoGameLib.NeoRendering;
+namespace NeoGameLib.NeoRendering.Animations;
 
 // note to future self:
 // NeoAnimator works by setting source rectangle in the update loop to the frames defined in the NeoAnimation object.
@@ -17,9 +17,16 @@ public class NeoAnimator : NeoComponent
 
     public int CurrentFrameIndex { get; private set; }
 
+    /// <summary>The clip being played; null before the first Play and after Stop.</summary>
+    public NeoAnimation Animation => _animation;
+
+    /// <summary>Is true if a non-looping clip had ran past its last frame.</summary>
+    /// <remarks>The polling twin of OnAnimationFinished for state machine transitions i.e. <c>AddTransition(attack, idle, () => animator.IsFinished)</c>.</remarks>
+    public bool IsFinished => _finishedFired;
+
     // note to future self:
     // invokes when a non-looping animation runs past its last frame
-    // can be used smth like attack->idle state-switching.
+    // for attack->idle style switching, NeoAnimatorController + IsFinished is the cleaner way; this stays for one-off reactions
     public Action OnAnimationFinished;
 
     public override void OnAwake()
@@ -29,15 +36,17 @@ public class NeoAnimator : NeoComponent
             throw new Exception("A Sprite Renderer component is required on an object with NeoAnimator");
     }
 
-    public void Play(NeoAnimation animation)
+    /// <param name="animation">the clip to play</param>
+    /// <param name="restart">replay from frame 0 even when this clip is already playing, e.g. a second attack right after the first</param>
+    public void Play(NeoAnimation animation, bool restart = false)
     {
         if (animation is null || animation.Frames.Count == 0)
             throw new Exception("Playing a null or empty animation. SOmehow you've managed to do that but congrats");
 
         // note to future self:
         // prevents same animation called in update frame via Play func in case if you fuck up.
-        // If that's what you do intend, either Stop() the animation first or Play() a different animation
-        if (_animation == animation) return;
+        // If that's what you do intend, pass restart: true, Stop() the animation first, or Play() a different animation
+        if (_animation == animation && !restart) return;
 
         _animation = animation;
         CurrentFrameIndex = 0;
@@ -50,6 +59,7 @@ public class NeoAnimator : NeoComponent
     public void Stop()
     {
         _animation = null;
+        _finishedFired = false;
     }
 
     public override void OnUpdate(GameTime gameTime)

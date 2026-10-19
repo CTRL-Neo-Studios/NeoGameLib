@@ -3,6 +3,7 @@ using NeoGameLib.Common;
 using NeoGameLib.NeoGO;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using NeoGameLib.NeoRendering.RenderFeatures.Sprite;
 
 namespace NeoGameLib.NeoRendering;
 

@@ -19,6 +19,17 @@ public class NeoBoxCollider : NeoComponent
     public Vector2 Offset { get; set; } = new(0);
     public Vector2 Size { get; set; } = new(1f);
 
+    /// <summary>
+    /// True means this collider only detects overlaps (fires OnCollisionEnter/Stay/Exit) and is ignored by NeoMover's movement correction.
+    /// </summary>
+    public bool IsTrigger { get; set; }
+
+    // collider-level pair callbacks: NeoTrigger overrides these so a trigger only reacts to its own box, not every collider on the object.
+    // these fire BEFORE the object's ICollision handlers.
+    internal virtual void OnPairEnter(NeoBoxCollider other, NeoCollision col) { }
+    internal virtual void OnPairStay(NeoBoxCollider other, NeoCollision col) { }
+    internal virtual void OnPairExit(NeoBoxCollider other) { }
+
     // note to self:
     // world-space bounds, WORLD-SPACE
     // also, note that the negative transform scale inverts the offset (mirrored object = mirrored box) but the size is absolute because a rectangle with negative width makes Intersects always return false and that's the kind of bug that'll fuck you in the arse if I didn't write and test it beforehand so you're welcome future-self
