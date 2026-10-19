@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using NeoGameLib.Common;
 using Microsoft.Xna.Framework;
+using NeoGameLib.Common;
 
-namespace NeoGameLib.NeoRendering;
+namespace NeoGameLib.NeoRendering.Animations;
 
 // note to future self:
 // animation data, as in an ordered list of source rects on a sprite sheet plus how long each frame stays on screen

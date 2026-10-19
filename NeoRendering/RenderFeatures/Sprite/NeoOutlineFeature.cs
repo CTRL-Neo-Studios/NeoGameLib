@@ -1,7 +1,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
-namespace NeoGameLib.NeoRendering.RenderFeatures;
+namespace NeoGameLib.NeoRendering.RenderFeatures.Sprite;
 
 /// <summary>
 /// Draws a solid-color outline behind the sprite.

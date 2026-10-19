@@ -1,8 +1,8 @@
 using System;
-using NeoGameLib.NeoGO;
 using Microsoft.Xna.Framework;
+using NeoGameLib.NeoGO;
 
-namespace NeoGameLib.NeoRendering;
+namespace NeoGameLib.NeoRendering.Animations;
 
 // note to future self:
 // NeoAnimator works by setting source rectangle in the update loop to the frames defined in the NeoAnimation object.

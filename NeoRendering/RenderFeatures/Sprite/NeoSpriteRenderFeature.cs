@@ -1,8 +1,8 @@
 using System;
-using NeoGameLib.NeoGO;
 using Microsoft.Xna.Framework.Graphics;
+using NeoGameLib.NeoGO;
 
-namespace NeoGameLib.NeoRendering;
+namespace NeoGameLib.NeoRendering.RenderFeatures.Sprite;
 
 /// <summary>
 /// A component that draws extra layers behind or in front of the NeoSpriteRenderer on the same object.
