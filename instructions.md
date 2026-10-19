@@ -960,5 +960,65 @@ COme to think of it... I might make it sometime. Or just use typescript lmao
 
 also, a batched per-layer tilemap renderer needs to be implemented in the future for better rendering performance since rn each tile is one neosprite pass.
 
+## [0.4.0] State Machines
+
+originally I wanted to evolve the animator into a unity-style animator state machine, but then it occurred to me that enemy AI needs state machines too. So  I'm making the the state machine be standalone.
+
+```csharp
+public class SlimeBrain : NeoComponent
+{
+    public NeoStateMachine<SlimeBrain> Fsm;
+    public int Hp = 3;
+    public bool JustAttacked; // set by Chase when it bites, cleared next tick
+    public float DistanceToPlayer() => /* ... */ 0;
+
+    public override void OnStart()
+    {
+        Fsm = new(this);
+        Patrol patrol = Fsm.Add(new Patrol());
+        Chase chase = Fsm.Add(new Chase());
+        Dead dead = Fsm.Add(new Dead());
+
+        Fsm.AddTransition(patrol, chase, () => DistanceToPlayer() < 96);
+        Fsm.AddTransition(chase, patrol, () => DistanceToPlayer() > 160);
+        Fsm.AddAnyTransition(dead, () => Hp <= 0);
+        Fsm.Start(patrol);
+    }
+
+    public override void OnUpdate(GameTime gameTime) => Fsm.Update(gameTime);
+}
+
+public class Chase : NeoState<SlimeBrain>
+{
+    public override void OnUpdate(GameTime gameTime) { /* Owner.ParentTransform ... move towards player */ }
+}
+```
+
+### Animator state machines
+
+`NeoAnimator` still plays exactly one clip. `NeoAnimatorController` owns a `NeoStateMachine<NeoAnimator>` whose `NeoAnimationState`s play their clip on enter. `NeoAnimator.IsFinished` (true once a non-looping clip is past its last frame) replaces the `OnAnimationFinished = () => Play(idle)` dance:
+
+```csharp
+NeoObject slime = World.Instantiate("Slime");
+slime.AddComponent(new NeoSpriteRenderer(RenderBus, sheet));
+NeoAnimator animator = slime.AddComponent<NeoAnimator>();
+SlimeBrain brain = slime.AddComponent<SlimeBrain>();
+NeoAnimatorController anim = slime.AddComponent<NeoAnimatorController>(); // after the brain, so it reads this tick's state
+
+NeoAnimationState idle = anim.AddState(idleClip);
+NeoAnimationState hop = anim.AddState(hopClip);
+NeoAnimationState bite = anim.AddState(biteClip); // loop: false
+
+anim.Machine.AddTransition(idle, hop, () => brain.Fsm.Current is Chase);
+anim.Machine.AddTransition(hop, idle, () => brain.Fsm.Current is Patrol);
+anim.Machine.AddAnyTransition(bite, () => brain.JustAttacked);
+anim.Machine.AddTransition(bite, hop, () => animator.IsFinished);
+anim.Machine.Start(idle);
+```
+
+the AI and the animation stay two separate machines and the animation just reads the brain
+
+// TODO: hierarchical machines (a state can own its own `NeoStateMachine` if ever needed), blend trees (sprites don't blend), and data-authored machines in neoprefabs (conditions are lambdas, so that would need the parameter system back; maybe later on top of the same core).
+
 ---
 
