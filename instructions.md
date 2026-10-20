@@ -898,7 +898,7 @@ the library ships `SpriteSpec`, `TextSpec`, `BoxColliderSpec` (Size required, Of
 ```
 
 - a prefab is tags + a spec list + an optional `collider` group name. specs apply in order; an entry's `id` names it for per-object overrides.
-- a prefab whose cells reference a collider group get merged into as few rectangles as possible, one `NeoBoxCollider` each (auto-added), and the group's specs land on each merged collider object -- that's where tags like `solid` go. group cells merge across layers. a group used by a prefab but missing from `colliders` throws.
+- a prefab whose cells reference a collider group get merged into as few rectangles as possible, one `NeoBoxCollider` each (auto-added), and the group's specs land on each merged collider object -- that's where tags like `solid` go. group cells merge across layers. a group used by a prefab but missing from `colliders` throws. (0.4.1: a `BoxColliderSpec` in the group sets the per-cell shape, see Collider group shapes)
 - the library file itself: `{ "prefabs": { ... }, "colliders": { ... } }`.
 
 ## [0.4.0] Maps
@@ -1073,3 +1073,22 @@ there are two kinds of names in data files:
 **free text** (no rules): layer names, object names, tags, world names, spec ids. the loader does not resolve the file names nor keys; just keep tags and spec ids the same everywhere you reference them, since they're matched exactly.
 
 spec and action `type`s are C# class names (or `[NeoName("...")]`)
+
+## [0.4.2] Collider group shapes
+
+a `BoxColliderSpec` inside a collider group's `specs` now means "the collider of ONE cell", and the merge stretches it over each run instead of always merging full cells. this is how people were already writing slabs, it just didn't do anything before (you got a full-cell box plus a stray 16x8 box in the middle of every merged run):
+
+```json
+"colliders": {
+  "FullWall": { "tags": [ "solid" ], "specs": [ { "type": "BoxColliderSpec", "properties": { "size": { "x": 16, "y": 16 } } } ] },
+  "UpperSlabWall": { "tags": [ "slab-upper" ], "specs": [ { "type": "BoxColliderSpec", "properties": { "size": { "x": 16, "y": 8 }, "offset": { "x": 0, "y": -4 } } } ] },
+  "LowerSlabWall": { "tags": [ "slab-lower" ], "specs": [ { "type": "BoxColliderSpec", "properties": { "size": { "x": 16, "y": 8 }, "offset": { "x": 0, "y": 4 } } } ] }
+}
+```
+
+- cells only merge along an axis where the cell box is at least the cell size, so neighbouring boxes touch. 16x8 slabs on 16x16 cells: a row of 4 becomes one 64x8 box, a column of 4 stays 4 boxes (merging them would fill the 8px gaps between them). a box smaller on both axes never merges
+- a merged box = the cell box stretched over the run: `(n - 1) * cellSize + size` on each merged axis, same `offset` from the run's center, `isTrigger` kept
+- a group with no `BoxColliderSpec` keeps the old behaviour (one full-cell box), so existing libraries build the same
+- several `BoxColliderSpec`s = several boxes per merged object, and the merge axes are the ones ALL of them allow
+- every other group spec still applies once per merged object, same as before
+- put upper and lower slabs in separate groups: the shape belongs to the group, not the prefab
