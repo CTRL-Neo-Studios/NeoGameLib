@@ -26,6 +26,24 @@ dotnet add package NeoGameLib
 
 same command pulls the latest version, the package reference in your csproj gets overwritten wiht the newer version number
 
+## Coordinates
+
+same as MonoGame / screen space: y points DOWN.
+
+| direction | sign |
+|---|---|
+| right | +x |
+| left | -x |
+| down | +y |
+| up | -y |
+
+- `(0, 0)` is the top-left of the world (and of the window for UI / `Input.MousePosition`)
+- rotation is in radians and positive = clockwise on screen (`Transform.Right` at 0, `Down` at +π/2, `Up` at -π/2)
+- positions are centers: an object's sprite (default `Anchor` = `(0.5, 0.5)`) and its `NeoBoxCollider` are both centred on `Transform.Position`. a collider `Offset` moves that center, and a sprite `Anchor` only moves the art, never a box collider (use `NeoSpriteCollider` if the box should follow the sprite)
+- `Size` is the full width/height, so a slab of height `h` inside a tile of height `H` sits at `±(H - h) / 2` from the tile center. e.g. 16x8 box in a 16x16 tile: `offset.y = -4` = upper slab, `+4` = lower slab
+- map cells are placed at `origin + (col * cellSize.x, row * cellSize.y)`, which is the tile's CENTER, so row 0 / col 0 is centred on `origin`
+- a negative `Transform.Scale` mirrors collider offsets too (flip y and an upper slab becomes a lower one)
+
 ## Schema tool
 
 every `dotnet build` of a game that references NeoGameLib runs the schema tool automatically and creates/updates `Data/neo.project.json` and `Data/<Game>.neoschema.json` which the map editor reads
