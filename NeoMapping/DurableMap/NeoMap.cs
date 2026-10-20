@@ -30,7 +30,7 @@ public sealed class NeoMap
     [JsonPropertyName("cellSize")] public Point CellSize { get; set; } = new(32, 32);
     [JsonPropertyName("origin")] public Vector2 Origin { get; set; }
 
-    /// <summary>Prefab library names resolved from Data/NeoPrefabs/[name].neoprefabs.json.</summary>
+    /// <summary>Prefab library names resolved from Data/NeoPrefabs/[name].neoprefabs.json; names may include subfolders, e.g. "terrain/common".</summary>
     [JsonPropertyName("prefabs")] public List<string> Libraries { get; set; } = new();
 
     [JsonPropertyName("layers")] public List<NeoMapLayer> Layers { get; set; } = new();
@@ -42,11 +42,11 @@ public sealed class NeoMap
 
     public static NeoMap Load(string name) => Load(name, null);
 
-    /// <summary>Loads a map by its name via file stream.</summary>
+    /// <summary>Loads Data/NeoMaps/[name].neomap.json via file stream; name may include subfolders, e.g. "forest/level1".</summary>
     /// <remarks>Since the final map might be too big for json to parse, a streamed read is much safer</remarks>
     public static NeoMap Load(string name, Func<string, NeoPrefabLibrary> loader)
     {
-        string path = $"{NeoProject.DataFolder}/{NeoProject.MapsFolder}/{name}{Extension}";
+        string path = NeoProject.DataPath(NeoProject.MapsFolder, name, Extension);
         using Stream stream = TitleContainer.OpenStream(path);
         NeoMap map = NeoJsonIO.Deserialize<NeoMap>(new StreamReader(stream).ReadToEnd(), path);
         map.Resolve(loader ?? DefaultLibraryLoader);
@@ -63,7 +63,7 @@ public sealed class NeoMap
 
     public string ToJson() => NeoJsonIO.Serialize(this);
 
-    /// <summary>Registers a world whose build callback loads a map file (world name defaults to map name).</summary>
+    /// <summary>Registers a world whose build callback loads a map file. mapName may include subfolders ("forest/level1"); the world name is separate and can stay short.</summary>
     public static NeoWorld RegisterWorld(string worldName, string mapName)
     {
         WorldManager manager = NeoGame.Singleton?.WorldManager ?? throw new InvalidOperationException("RegisterWorld requires a running NeoGame instance with an initialized World Manager");
@@ -109,14 +109,8 @@ public sealed class NeoMap
         }
     }
 
-    
-    /// <remarks>Since the final map might be too big for json to parse, a streamed read is much safer</remarks>
-    private static NeoPrefabLibrary DefaultLibraryLoader(string name)
-    {
-        string path = $"{NeoProject.DataFolder}/{NeoProject.PrefabsFolder}/{name}{NeoPrefabLibrary.Extension}";
-        using Stream stream = TitleContainer.OpenStream(path);
-        return NeoJsonIO.Deserialize<NeoPrefabLibrary>(new StreamReader(stream).ReadToEnd(), path);
-    }
+
+    private static NeoPrefabLibrary DefaultLibraryLoader(string name) => NeoPrefabLibrary.Load(name);
 
     private void BuildLayer(NeoWorld world, NeoMapLayer layer, List<NeoObject> created)
     {
