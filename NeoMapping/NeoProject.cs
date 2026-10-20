@@ -26,4 +26,14 @@ public sealed class NeoProject
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement> Extensions { get; set; } = new();
+
+    /// <summary>
+    /// The TitleContainer path of a map/library by name i.e. <c>DataPath(MapsFolder, "forest/level1", NeoMap.Extension)</c> -> <c>Data/NeoMaps/forest/level1.neomap.json</c>
+    /// </summary>
+    /// <remarks>the passed-in names might contain '/'-separated subfolders; see <see cref="NeoNames.ValidatePath"/> for allowed chars in regex rules</remarks>
+    public static string DataPath(string folder, string name, string extension)
+    {
+        NeoNames.ValidatePath(name);
+        return $"{DataFolder}/{folder}/{name}{extension}";
+    }
 }
