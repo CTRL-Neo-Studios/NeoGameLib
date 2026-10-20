@@ -1022,3 +1022,54 @@ the AI and the animation stay two separate machines and the animation just reads
 
 ---
 
+# 0.4.1 (mostly just improving NeoMap Editor + NeoGameLib features & UX/DX parity)
+
+PLEASE, PLEASE when you use the editor, use snake_case or kebab-case
+
+## [0.4.1] Folders
+
+maps and prefab libraries can now live in subfolders. Yay to people who love organizing
+
+fortunately and unfortunately, the subfolders are stored in the names, i.e. `Data/NeoMaps/forest/level1.neomap.json` is the map `"forest/level1"`, `Data/NeoPrefabs/terrain/common.neoprefabs.json` is the library `"terrain/common"`. that name goes everywhere a name goes:
+
+```csharp
+NeoMap.Load("forest/level1");
+NeoMap.RegisterWorld("level1", "forest/level1"); // world names are separate. make sure you get the difference between them, thank you, don't open issues in the lib when you fuck up because of this
+// or maybe do if you fumble? I'm still working on some DX stuff and I'd appreciate if you open pull requests & issues if you fumble over this
+```
+
+```json
+{ "prefabs": [ "terrain/common" ] }
+{ "type": "SwitchWorldAction", "properties": { "world": "forest/level1" } }
+```
+
+- names are `/`-separated and relative
+- `LoadWorldAction` / `SwitchWorldAction` register unknown worlds from the same-named map, so a world loaded that way is literally called `"forest/level1"`. register it yourself with `RegisterWorld` if you want a short world name
+- moving a map or library to another folder renames it, so every map/action that references it has to be updated. But I've made it so that the editor does this for you, you're very welcome. (0.1.1 version though, not 0.1.0, check your versions)
+- the build targets now builds & recurses `Data/NeoMaps/**` & `Data/NeoPrefabs/**`
+
+prefabs inside a library now gets a `folder` (e.g. `"terrain/slabs"`, `""` for root). it's editor-only grouping, meaning that the runtime ignores it and it is NOT part of the prefab's name
+
+## [0.4.1] Naming
+
+I find, or if you find, asking myself/yourself "should my prefab be `MountainTile/Full` or `MountainTile Full`?"
+
+The Answer Is: `MountainTile Full`. `/` in a prefab name is rejected; put `MountainTile` in its `folder` instead. (the naming rules are in `NeoMapping/NeoNames.cs`)
+
+there are two kinds of names in data files:
+
+**path names** (maps, prefab libraries): they ARE file paths, so they should work on every OS.
+- `/`-separated segments; each segment is ASCII letters, digits, `_`, `-`, with spaces and dots allowed in the middle but not at either end
+  - ok: `level1`, `forest/level1`, `Act 1/Boss Room`, `v1.2/map`
+  - not ok: `..`, `.`, empty segments (`a//b`, `/a`, `a/`), `\`, `:`, `?*<>|"`, a trailing dot or space
+- checked by `NeoProject.DataPath` on every `NeoMap.Load` / `NeoPrefabLibrary.Load`, which covers map `prefabs` lists and world actions too
+- map files are also case-sensitive on linux/mac and not on windows, so `Level1` and `level1` are two maps on one machine and one on another. keep names unique ignoring case
+
+**key names** (prefabs, collider groups, prefab `folder` segments): plain dictionary keys
+- anything non-empty except `/` and control characters, and no leading/trailing whitespace (`"wall "` vs `"wall"` is an invisible typo)
+- spaces, dots, unicode are fine: `MountainTile Full`, `slab-top`, `Wall_1`, `草`
+- checked when a library loads (`NeoPrefabLibrary.Load` / `FromJson`), so a bad name fails at the file instead of deep inside a map build
+
+**free text** (no rules): layer names, object names, tags, world names, spec ids. the loader does not resolve the file names nor keys; just keep tags and spec ids the same everywhere you reference them, since they're matched exactly.
+
+spec and action `type`s are C# class names (or `[NeoName("...")]`)
