@@ -10,6 +10,7 @@ using NeoGameLib.NeoGO;
 using NeoGameLib.NeoMapping.DurablePrefabs;
 using NeoGameLib.NeoMapping.DurableSpecifications;
 using NeoGameLib.NeoMapping.Grouping;
+using NeoGameLib.NeoMapping.DurableSpecifications.Primitives;
 
 namespace NeoGameLib.NeoMapping.DurableMap;
 
@@ -226,6 +227,17 @@ public sealed class NeoMap
         {
             if (!_colliders.TryGetValue(groupName, out NeoColliderGroup group)) throw new InvalidOperationException($"collider group '{groupName}' is used by a prefab but isn't defined in any prefab library");
 
+            (List<BoxColliderSpec> boxes, List<NeoSpecEntry> rest) = CellShape(groupName, group);
+
+            // cells only merge along an axis where the per-cell boxes touch or overlap their neighbours' (box size >= cell size),
+            // otherwise the merged box would fill the gaps, e.g. stacked 16x8 slabs on 16x16 cells merge sideways but never vertically
+            bool mergeX = true, mergeY = true;
+            foreach (BoxColliderSpec box in boxes)
+            {
+                mergeX &= box.Size.X >= CellSize.X;
+                mergeY &= box.Size.Y >= CellSize.Y;
+            }
+
             bool[,] covered = new bool[rows, cols];
             for (int row = 0; row < rows; row++)
             {
@@ -235,6 +247,7 @@ public sealed class NeoMap
 
                     int width = 1;
                     while (
+                        mergeX &&
                         col + width < cols && 
                         !covered[row, col + width] && 
                         mask[row, col + width]
@@ -245,6 +258,7 @@ public sealed class NeoMap
 
                     int height = 1;
                     while (
+                        mergeY &&
                         row + height < rows && 
                         RunIsFree(mask, covered, row + height, col, width)
                     )
@@ -259,12 +273,51 @@ public sealed class NeoMap
                     Vector2 center = (CellToWorld(row, col) + CellToWorld(row + height - 1, col + width - 1)) / 2f;
                     NeoObject solid = world.Instantiate($"{groupName}-{row}-{col}", new Transform(center));
                     ApplyTags(solid, group.Tags);
-                    solid.AddComponent(new NeoBoxCollider { Size = new Vector2(width * CellSize.X, height * CellSize.Y) });
-                    ApplyEntries(solid, group.Specs, null);
+
+                    // each per-cell box stretched over the run: the first cell's near edge to the last cell's far edge, same offset from the run's center
+                    foreach (BoxColliderSpec box in boxes)
+                        solid.AddComponent(new NeoBoxCollider
+                        {
+                            Size = new Vector2((width - 1) * CellSize.X + box.Size.X, (height - 1) * CellSize.Y + box.Size.Y),
+                            Offset = box.Offset,
+                            IsTrigger = box.IsTrigger,
+                        });
+
+                    ApplyEntries(solid, rest, null);
                     created.Add(solid);
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// A group's BoxColliderSpecs describe the collider of ONE cell (e.g. a 16x8 slab offset y=4 on 16x16 cells); the merge stretches them over each run.
+    /// A group without any keeps the old behaviour: one full-cell box. Every other spec is applied once per merged object as before.
+    /// </summary>
+    private (List<BoxColliderSpec> Boxes, List<NeoSpecEntry> Others) CellShape(string groupName, NeoColliderGroup group)
+    {
+        List<BoxColliderSpec> boxes = new();
+        List<NeoSpecEntry> rest = new();
+        foreach (NeoSpecEntry entry in group.Specs ?? new())
+        {
+            if (entry.Type != NeoRegistry.NameOf(typeof(BoxColliderSpec)))
+            {
+                rest.Add(entry);
+                continue;
+            }
+
+            try
+            {
+                boxes.Add((BoxColliderSpec)NeoRegistry.CreateSpec(entry.Type, entry.Properties));
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or JsonException)
+            {
+                throw new InvalidOperationException($"collider group '{groupName}' (spec '{entry.Type}'): {ex.Message}", ex);
+            }
+        }
+
+        if (boxes.Count == 0) boxes.Add(new BoxColliderSpec(CellSize.ToVector2()));
+        return (boxes, rest);
     }
 
     private static bool RunIsFree(bool[,] mask, bool[,] covered, int row, int col, int width)
