@@ -403,33 +403,9 @@ Vector2 onScreen = RenderBus.WorldToScreen(new Vector2(100, 50));
 ```
 
 ## [0.3.0] Screen-Space UI
-screen-space canvases, drawn AFTER the world so they ignore the camera entirely. screen-space contains UI elements using UI units and normalized anchors/pivots. by default 1 UI unit = 1 window pixel, see the 0.3.1 UI scaling section for resolution scaling.
+screen-space canvases, drawn AFTER the world so they ignore the camera entirely. screen-space contains UI elements using UI units and normalized anchors/pivots, plus buttons that read the Input facade.
 
-```csharp [InsideAClassInheritingNeoGameClass.cs]
-NeoCanvas canvas = new();
-NeoPanel panel = new()
-{
-    Transform = { Position = new Vector2(10, 10), Size = new Vector2(200, 100), Anchor = Vector2.Zero, Pivot = Vector2.Zero },
-    Color = Color.Gray
-};
-NeoLabel label = new() { Text = "HP 100", Color = Color.White }; // Font is borrowed, never disposed by the UI
-panel.Children.Add(label);
-canvas.Children.Add(panel);
-UIBus.Add(canvas); // NeoGame.UIBus updates before gameplay and draws its contents after the world
-
-// top-left = parent top-left + parent size * Anchor + Position - own size * Pivot.
-// Anchor and Pivot are centered (0.5, 0.5) by default since 0.3.1
-```
-
-buttons are clickable labels that read the Input facade
-
-```csharp
-NeoButton play = new() { Text = "Play", Font = font, Transform = { Anchor = Vector2.Zero, Pivot = Vector2.Zero } }; // sizes itself to the text
-play.OnClick = () => { /* start game */ };
-panel.Children.Add(play);
-```
-
-for implementing custom elements: you should subclass NeoUIElement and override OnUpdate() and OnDraw() functions. OnDrawUI() on your game draws AFTER all canvases and screen-space. override MeasureContent() to tell Fit how big your content is.
+how to actually use any of it (canvases, panels, labels, buttons, images, custom elements) moved to [ui-instr.md](ui-instr.md). the examples that used to be here called `Transform` on UI elements, which never existed, so they never compiled. the ones in that file do, I checked.
 
 ---
 
@@ -506,100 +482,7 @@ outline.Enabled = renderer.IsCursorOnSprite();
 
 ## [0.3.2] UI sizing and FlexBox
 
-every element picks its size per axis with `Transform.WidthMode` and `Transform.HeightMode`:
-- `Fixed` (default): use `Size`.
-- `Fill`: attempts to resize to parent's full length.
-- `Fit`: wraps the content; as in measured text for labels/buttons or a box that holds any children.
-
-labels and buttons start as `Fit` on both axes. this replaces the old `AutoSize` flag. to give a button a fixed size, set the mode back to `Fixed` and set `Size`.
-
-```csharp
-// a panel that wraps its children. no flexbox
-NeoPanel card = new()
-{
-    Transform = { WidthMode = NeoUISizing.Fit, HeightMode = NeoUISizing.Fit }, Color = Color.Gray,
-    Padding = new NeoPadding(16, 8) // 16 left and right, 8 top and bottom
-};
-card.Children.Add(new NeoLabel { Text = "HP 100", Font = font });
-```
-
-panels (and flexboxes, since they inherit panels) have per-side `Padding`. the children anchors to the padded inner box where `Fill` takes the inner size and `Fit` adds the padding around the children.
-
-```csharp
-panel.Padding = 12; // same on all four sides
-panel.Padding = new NeoPadding(16, 8); // horizontal, vertical
-panel.Padding = new NeoPadding(4, 8, 4, 16); // left, top, right, bottom
-panel.Padding = new NeoPadding(8) { Bottom = 24 }; // 8 everywhere except the bottom
-```
-
-negative or non-finite padding throws. (Ideally I should change this in the future but for now this works) If the padding is bigger than the panel then it'll squeeze the inner box to 0.
-
-`NeoFlexBox` is a `NeoPanel` that orders its children in a row or a column. it controls the children's positions.
-
-```csharp
-NeoFlexBox menu = new()
-{
-    Direction = NeoFlexDirection.Column,
-    Gap = 8, Padding = 12,
-    Justify = NeoFlexAlign.Center,
-    Align = NeoFlexAlign.Stretch,
-    Transform = { WidthMode = NeoUISizing.Fit, HeightMode = NeoUISizing.Fit },
-    Color = Color.DarkSlateGray
-};
-menu.Children.Add(new NeoButton { Text = "Play", Font = font });
-menu.Children.Add(new NeoButton { Text = "Quit", Font = font });
-```
-
-When `Direction = Column`:
-
-```
- Align = Start            Align = Center           Align = End              Align = Stretch
-┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│[Play]            │     │      [Play]      │     │            [Play]│     │[      Play      ]│
-│[Settings     ]   │     │  [Settings     ] │     │   [Settings     ]│     │[    Settings    ]│
-│[Quit  ]          │     │     [Quit  ]     │     │          [Quit  ]│     │[      Quit      ]│
-└──────────────────┘     └──────────────────┘     └──────────────────┘     └──────────────────┘
-  own widths, left         own widths, middle       own widths, right        all = inner width
-```
-
-When `Direction = Row`:
-
-```
- Align = Start                          Align = Stretch
-┌────────────────────────────┐         ┌────────────────────────────┐
-│[A ]┌─────┐[C]              │         │┌──┐┌─────┐┌─┐              │
-│    │  B  │                 │         ││A ││  B  ││C│              │
-│    └─────┘                 │         ││  ││     ││ │              │
-│                            │         │└──┘└─────┘└─┘              │
-└────────────────────────────┘         └────────────────────────────┘
-  own heights, top-aligned               all = inner height
-```
-
-Padding & Box:
-
-```
-┌────────────────────────┐
-│ ← Padding              │
-│  ┌──────────────────┐  │
-│  │ child (stretched)│  │   stretched width = box width − Padding.Left − Padding.Right
-│  └──────────────────┘  │
-│                 Gap ↕  │
-│  ┌──────────────────┐  │ <- Box
-│  │ child (stretched)│  │
-│  └──────────────────┘  │
-└────────────────────────┘
-```
-
-Growing Children along the axes w/ `Fill`:
-
-```
- widths: [Fixed 40] [Fill] [Fill]   in a 200-wide row, Gap = 0
-┌──────────────────────────────────┐
-│[ 40 ][     80     ][     80     ]│
-└──────────────────────────────────┘
-```
-
-(I asked chat gippity to help me draw in ascii how the general concept (so not just limited to this library, applies to other UI lib flex, though details may vary) of Align, Direction, Flexbox should work.)
+every element got per-axis sizing modes (`Fixed`, `Fill`, `Fit`, replacing the old `AutoSize` flag), panels got per-side `Padding`, and `NeoFlexBox` showed up: a panel that lays its children out in a row or a column like css flex. the full thing, including the ascii diagrams and what each `Justify`/`Align` value actually does, is in [ui-instr.md](ui-instr.md) under "Sizing" and "FlexBox".
 
 // TODO: wrapping onto a second line, min/max sizes.
 
@@ -607,36 +490,7 @@ Growing Children along the axes w/ `Fill`:
 
 ## [0.3.2] UI scaling
 
-every canvas picks how the viewport pixels turn into UI units. the viewport is the game's draw box: the letterboxed area when `ViewportAspect` is set, else the whole window. the canvas layout size is `viewport / Scale`, so everything inside it (anchors, padding, flexbox, Fit) works in UI units and doesn't care about the resolution.
-
-```csharp
-// the default of ScaleFactor is 1 UI unit = ScaleFactor viewport pixels (1 by default), same as before 0.3.1
-NeoCanvas debug = new() { ScaleFactor = 2f };
-
-// design at 1280x720 & grow/shrink with the viewport
-NeoCanvas hud = new()
-{
-    ScaleMode = NeoCanvasScaleMode.ScaleWithScreen,
-    ReferenceResolution = new Vector2(1280, 720),
-    Match = 1f, // 0 = follow viewport width, 1 = follow viewport height, between = blend
-    PixelPerfect = false // true = whole-number scale (at least 1) + point sampling, for pixel-art UI
-};
-float scale = hud.Scale; // viewport pixels per UI unit, updated every pass
-```
-
-`Match` blends in log space like unity does, so 0.5 treats a 2x-wider viewport the same as a 2x-taller one. with `ViewportAspect` set to the reference ratio (e.g. 16:9 for 1280x720) the viewport always has that shape, so every `Match` value gives the same exact scale. a window resize, a window mode change or a new `ViewportAspect` gets picked up on the next update.
-
-each canvas draws in its own SpriteBatch pass scaled by `Scale`, so text, panels and images all scale with no per-element code. `OnDrawUI` still draws afterwards in plain viewport pixels.
-
-mouse: the mouse is in window pixels, the layout is in UI units. buttons convert already. custom elements do the same:
-
-```csharp
-bool over = ContainsScreenPoint(Input.MousePosition); // inside this element as drawn: letterbox, canvas scale, Rotation/Scale all handled
-Vector2 local = ScreenToLocal(Input.MousePosition); // window pixels -> this element's untransformed layout space
-Vector2 back = canvas.CanvasToScreen(element.Transform.LayoutPosition); // UI units -> window pixels
-```
-
-heads up: SpriteFont is a bitmap, so text scaled way up gets blurry. load a bigger font for big scale ranges.
+canvases can scale the UI with the viewport now: `ConstantPixelSize` with a `ScaleFactor`, or `ScaleWithScreen` with a `ReferenceResolution` + unity-style `Match`, and `PixelPerfect` for pixel-art UI. see "Scaling" in [ui-instr.md](ui-instr.md).
 
 ---
 
@@ -646,6 +500,7 @@ the game viewport doesn't have to match the window anymore. set an aspect ratio 
 
 ```csharp
 ViewportAspect = 16f / 9f; // null (default) = fill the whole window
+SetViewportAspect(256, 232); // same thing from a width and height, e.g. an NES screen (0.4.4)
 LetterboxColor = Color.Black; // the bars
 ClearColor = Color.CornflowerBlue; // the viewport background, replaces the hardcoded clear
 Rectangle box = ViewportBounds; // window-pixel rectangle the game draws into
@@ -659,28 +514,7 @@ the viewport is re-applied every update and draw, so window resizes and window m
 
 ## [0.3.2] ScreenTransform
 
-UI layout moved from the element onto `element.Transform`, a `ScreenTransform`. it inherits the world `Transform`, so `Position`, `Rotation`, `Scale` and the Up/Right helpers are the same members you use on game objects, plus:
-
-```csharp
-NeoPanel badge = new()
-{
-    Transform =
-    {
-        Size = new Vector2(64, 64),
-        Anchor = new Vector2(1, 0), Pivot = new Vector2(1, 0), // top-right corner
-        Position = new Vector2(-8, 8),
-        WidthMode = NeoUISizing.Fixed, HeightMode = NeoUISizing.Fixed,
-        Rotation = MathHelper.ToRadians(15), Scale = new Vector2(1.2f) // visual only
-    }
-};
-Vector2 topLeft = badge.Transform.LayoutPosition; // computed, read-only: LayoutPosition, LayoutSize, DesiredSize
-```
-
-- `Transform` is get-only: one transform per element, set it with the nested `Transform = { ... }` initializer.
-- Anchor and Pivot default to (0.5, 0.5), centered. NeoFlexBox children and canvases ignore them.
-- Rotation (radians) and Scale work like a CSS transform: the element and its children turn/scale around the Pivot when drawn. layout, Fit and NeoFlexBox use the untransformed box, so a rotated button doesn't push its neighbours around. hit tests (`ContainsScreenPoint`, buttons) follow the drawn shape.
-- a rotated or scaled element costs one extra SpriteBatch pass for its subtree. the canvas's own Rotation/Scale do nothing, use the canvas scale settings instead.
-
+UI layout moved from the element onto `element.ScreenTransform`, a `ScreenTransform` that inherits the world `Transform` and adds `Size`, `Anchor`, `Pivot`, the sizing modes and the computed layout box. Rotation and Scale on it work like a CSS transform. see "ScreenTransform" in [ui-instr.md](ui-instr.md).
 
 ---
 
@@ -905,7 +739,7 @@ everything about making them, how custom data types serialize, the built-in spec
 
 - layers stack in array order; a legend character maps to a prefab, `null` to empty, keys must be one character, rows may be ragged.
 - an object inherits its prefab's tags + specs, adds its own on top (empty prefab ref = pure tag marker, e.g. spawnpoints). `overrides` shallow-merge top-level properties into the prefab's spec entries, see "Specs in files" in [specs-serialization-and-creation-instr.md](specs-serialization-and-creation-instr.md).
-- `SwitchWorldAction` unloads the trigger's own world before loading the target, which destroys the trigger, so any actions after it in the same list don't run. put it last.
+- `SwitchWorldAction` unloads the trigger's own world before loading the target, which destroys the trigger, so any actions after it in the same list don't run. put it last. (more on actions in "Actions" in [specs-serialization-and-creation-instr.md](specs-serialization-and-creation-instr.md))
 - runtime: `WorldManager.CreateWorld("level1", w => NeoMap.Load("level1").Build(w));`, or `NeoMap.RegisterWorld("level1", "level1")` for the same thing in one call, which is what `LoadWorldAction`/`SwitchWorldAction` use when the world isn't registered yet. building never mutates the map, so one `NeoMap` can build any number of worlds. `NeoMap.FromJson` / `ToJson` exist for editors.
 
 ## [0.4.0] Tags
@@ -918,15 +752,7 @@ every collider has enter/stay/exit events now: the collision bus diffs this fram
 
 `NeoTrigger` is a `NeoBoxCollider` with `IsTrigger = true` (the mover ignores triggers: no push-out, no grounding) that fires action lists when a matching object enters, stays in, or exits its bounds. the tag filter is `null` = anything.
 
-an action is the same idea as a spec, but for behaviour: `INeoAction` types, discovered automatically, stored in map files as `{ "type": ..., "properties": ... }` lists. built-ins:
-
-- `LoadWorldAction { world }` -- loads a world next to the running ones, never unloads anything. registers from the same-named map if needed
-- `SwitchWorldAction { world, unload = null }` -- unloads `unload` (null = the trigger's own world), then loads `world`. list `world` itself in `unload` to restart a level
-- `UnloadWorldAction { world = null }` -- null = the trigger's own world
-- `DestroyAction { target = "self" | "other" }` -- queues the destroy for end of tick
-- `SetEnabledAction { component, enabled = true, target = "self" }` -- matches a component by class name
-
-game-defined actions: `public sealed record SaveGameAction(string Slot) : INeoAction { public void Invoke(NeoActionContext ctx) { ... } }`. `ctx.Self` is the trigger's object, `ctx.Other` the overlapping one. actions run during the collision pass, so loading worlds / destroying objects mid-callback is safe (same guarantee as any collision callback).
+an action is the same idea as a spec, but for behaviour: `INeoAction` types, discovered automatically, stored in map files as `{ "type": ..., "properties": ... }` lists. the built-ins (`LoadWorldAction`, `SwitchWorldAction`, `UnloadWorldAction`, `DestroyAction`, `SetEnabledAction`), making your own, and how triggers fire them are in "Actions" in [specs-serialization-and-creation-instr.md](specs-serialization-and-creation-instr.md).
 
 a door is now data, not code: sprite + `TriggerSpec` + unload/load actions. actions compose into lists, and `OnStay` exists for things like damage-over-time zones.
 
@@ -1147,3 +973,38 @@ State machine + animator controller was too hard to setup, as well as animation 
 - the state machine docs are rewritten as quickstart + recipes + reference
 
 Added a color field to `SpriteSpec` so that people no longer needs to draw separate color textures to indicate different color tiles. Just set the `color` field in the sprite spec and it'll apply automatically to `NeoSpriteRenderer`'s field and the rendering'll do its job. format and rules: "SpriteSpec.color" in [specs-serialization-and-creation-instr.md](specs-serialization-and-creation-instr.md).
+
+UI docs moved to [ui-instr.md](ui-instr.md) and got rewritten, because the old 0.3.x examples set `Transform` on UI elements, which never existed (it's `ScreenTransform`), so none of them compiled. every block in the new file compiles, and it lists what the elements DON'T do (clipping, text wrapping, panel borders, image auto-size, keyboard focus, ...) so nobody goes looking for them again.
+
+---
+
+## [0.4.4] UI that behaves like html/css (BREAKING defaults)
+
+I rebuilt the Zelda HUD in my midterm project and wrote it the way I'd write a webpage, and it came out as a black box half off the screen with a white rectangle on it. not my code's fault (ok, partially), the defaults were just nothing like the web. so now they are:
+
+- `Anchor` and `Pivot` default to (0, 0): an element sits at its parent's top-left + `Position`, like css. set both to 0.5 to center
+- new default sizing mode `Auto` (css `width: auto`): uses `Size` per axis when it's set, wraps the content otherwise. panels and flexboxes with no `Size` wrap their children now instead of being 0x0
+- `NeoPanel`/`NeoFlexBox` are transparent by default (they were white)
+- `NeoImage` sizes to its texture like an `<img>`
+- `Visible = false` is `display: none` now: hidden elements don't update either, so hidden buttons can't be clicked
+- `Align = SpaceBetween` doesn't stretch on the cross axis anymore (it behaves like `Start`)
+
+old UI code: add `Anchor = new(0.5f), Pivot = new(0.5f)` where you relied on centering, and `Color = Color.White` where you relied on the white panel. the table at the top of [ui-instr.md](ui-instr.md) has the full before/after.
+
+also in 0.4.4:
+
+- `SetWindowSize(width, height)` and `SetViewportAspect(width, height)` on `NeoGame` (see 0.3.1 Window Sizing and 0.3.2 Letterbox viewport). setting `PreferredBackBufferWidth/Height` in `OnInitialize` never resized the window, which is why a "bigger window" kept coming out 800x480
+- `PixelPerfect` canvases dropped a whole scale step on some window sizes: 1280 / 256 came out as 4.9999995 from the log-space math and floored to 4 instead of 5. it snaps first now
+
+## [0.4.4] Set Window & Viewport aspect sizes
+
+`SetWindowSize(width, height)` resizes the window. call it from `OnInitialize` or any time later, applies changes on call
+
+```csharp
+protected override void OnInitialize()
+{
+    SetWindowSize(1280, 1280);
+}
+```
+
+don't set `GraphicsDeviceManager.PreferredBackBufferWidth/Height` from `OnInitialize` by hand because you need to manually call MonoGame's `ApplyChanges()` later and some of the resizing logic needs to recalculate. `SetWindowSize` does that for you -- in fullscreen it remembers the size and uses it when you go back to `Windowed`.

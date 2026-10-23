@@ -105,7 +105,8 @@ public class NeoCanvas : NeoUIElement
             scale = MathF.Pow(2, MathHelper.Lerp(width, height, _match));
         }
 
-        if (PixelPerfect) scale = MathF.Max(1, MathF.Floor(scale));
+        // log2/pow round-trips land a hair under whole numbers (1280/256 -> 4.9999995), so snap before flooring or the UI drops a whole scale step
+        if (PixelPerfect) scale = MathF.Max(1, MathF.Floor(scale + 1e-4f));
         Scale = scale;
     }
 

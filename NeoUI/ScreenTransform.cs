@@ -31,9 +31,9 @@ public class ScreenTransform : Transform
         set { ValidateNormalized(value); _pivot = value; }
     }
 
-    public NeoUISizing WidthMode { get; set; } = NeoUISizing.Fixed;
+    public NeoUISizing WidthMode { get; set; } = NeoUISizing.Auto;
 
-    public NeoUISizing HeightMode { get; set; } = NeoUISizing.Fixed;
+    public NeoUISizing HeightMode { get; set; } = NeoUISizing.Auto;
 
     public Vector2 DesiredSize { get; internal set; }
 

@@ -195,6 +195,41 @@ public class NeoGame : Game
     // sets on every update and draw due to MonoGame resetting the viewport to the full back buffer when the window resizes
     private void ApplyViewport() => GraphicsDevice.Viewport = new Viewport(ViewportBounds);
 
+    /// <summary>
+    /// Sets the viewport aspect from a width and height, e.g. SetViewportAspect(256, 232) for an NES screen. Same as setting ViewportAspect = width / height.
+    /// </summary>
+    public void SetViewportAspect(float width, float height)
+    {
+        if (!float.IsFinite(width) || !float.IsFinite(height) || width <= 0 || height <= 0)
+            throw new ArgumentOutOfRangeException(width <= 0 || !float.IsFinite(width) ? nameof(width) : nameof(height), "the viewport width and height must be positive and finite");
+        ViewportAspect = width / height;
+    }
+
+    /// <summary>
+    /// Makes viewport fill to window size again.
+    /// </summary>
+    public void ResetViewportAspect()
+    {
+        ViewportAspect = null;
+    }
+
+    /// <summary>
+    /// Sets the window's size in pixels. Works from the constructor, OnInitialize, or any time after.
+    /// </summary>
+    public void SetWindowSize(int width, int height)
+    {
+        if (width <= 0) throw new ArgumentOutOfRangeException(nameof(width), "the window width must be positive");
+        if (height <= 0) throw new ArgumentOutOfRangeException(nameof(height), "the window height must be positive");
+
+        _windowedSize = new Point(width, height);
+        if (WindowMode != NeoWindowMode.Windowed) return;
+
+        _gdm.PreferredBackBufferWidth = width;
+        _gdm.PreferredBackBufferHeight = height;
+        // before Initialize the device doesn't exist yet and picks the preferred size up when it's created
+        if (_gdm.GraphicsDevice is not null) _gdm.ApplyChanges();
+    }
+
     /// <summary>The mode from the last SetWindowMode call. The game starts in Windowed by default.</summary>
     public NeoWindowMode WindowMode { get; private set; } = NeoWindowMode.Windowed;
 
@@ -258,7 +293,7 @@ public class NeoGame : Game
     /// <summary>
     /// this is the screen-space equivalent of OnDraw and it runs after all canvases in window pixels with an identity matrix, so it ignores the camera and the canvas scale.
     /// </summary>
-    /// <remarks>See instructions.md 0.3.0 Actual Implementation section beginning for more info.</remarks>
+    /// <remarks>See ui-instr.md "OnDrawUI" for more info.</remarks>
     protected virtual void OnDrawUI(SpriteBatch spriteBatch, GameTime gameTime) { }
 }
 

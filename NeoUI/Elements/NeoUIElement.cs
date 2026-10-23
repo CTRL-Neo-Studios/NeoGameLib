@@ -23,10 +23,10 @@ public class NeoUIElement
 
     public ScreenTransform ScreenTransform { get; } = new();
 
-    /// <summary>Disables updates for this subtree. Independent of Visible.</summary>
+    /// <summary>Disables updates for this subtree but keeps drawing it. Independent of Visible.</summary>
     public bool Enabled { get; set; } = true;
 
-    /// <summary>Hides this subtree. Independent of Enabled.</summary>
+    /// <summary>Hides this subtree, like css `display: none`: no drawing, no updates (so no clicks), no layout space.</summary>
     public bool Visible { get; set; } = true;
 
     /// <summary>Matrix applying this element's rotation/scale, for drawing and hit-testing.</summary>
@@ -74,10 +74,19 @@ public class NeoUIElement
 
         Vector2 fit = Vector2.Max(MeasureContent(), MeasureChildren()) + ContentPadding.Total;
         ScreenTransform.DesiredSize = new Vector2(
-            (ScreenTransform.WidthMode == NeoUISizing.Fit) ? fit.X : ScreenTransform.Size.X,
-            (ScreenTransform.HeightMode == NeoUISizing.Fit) ? fit.Y : ScreenTransform.Size.Y
+            DesiredAxis(ScreenTransform.WidthMode, ScreenTransform.Size.X, fit.X),
+            DesiredAxis(ScreenTransform.HeightMode, ScreenTransform.Size.Y, fit.Y)
         );
     }
+
+    // Auto = Size when set, content otherwise (css `width: auto`).
+    // Fill measures the same way: the parent stretches it on placement, but a Fit parent still needs its content size (css does the same)
+    private static float DesiredAxis(NeoUISizing mode, float size, float fit) => mode switch
+    {
+        NeoUISizing.Fit => fit,
+        NeoUISizing.Fixed => size,
+        _ => size > 0 ? size : fit,
+    };
 
     private protected virtual NeoPadding ContentPadding => default;
 
@@ -148,7 +157,7 @@ public class NeoUIElement
     internal void Visit(NeoUIBus bus, NeoCanvas root, GameTime? gameTime, SpriteBatch? spriteBatch, Point viewportSize)
     {
         bool drawing = spriteBatch != null;
-        if (drawing ? !Visible : !Enabled) return;
+        if (!Visible || (!drawing && !Enabled)) return;
         if (_traversing) throw new InvalidOperationException("A UI subtree cannot be traversed recursively.");
 
         _traversing = true;
@@ -222,7 +231,7 @@ public class NeoUIElement
         for (NeoUIElement element = this; element != null; element = element.Parent)
         {
             if (!element._traversing || element._attachmentVersion != element._traversalVersion ||
-                (drawing ? !element.Visible : !element.Enabled)) return false;
+                !element.Visible || (!drawing && !element.Enabled)) return false;
             if (ReferenceEquals(element, root)) return true;
         }
         return false;
