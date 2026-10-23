@@ -1151,10 +1151,14 @@ a `BoxColliderSpec` inside a collider group's `specs` now means "the collider of
 
 ---
 
-# 0.4.3 (state machine DX)
+## [0.4.3] state machine DX, SpriteSpec Color
+
+State machine + animator controller was too hard to setup, as well as animation clips.
 
 - lambda states: `fsm.AddState(name, onEnter, onUpdate, onExit)` — no subclass needed for simple states
 - `NeoAnimatorController` finds or adds the `NeoAnimator` itself (and keeps it before itself), and `NeoAnimator` finds the sprite renderer whenever it's added, so add order no longer throws
 - clips can carry a texture: `new NeoAnimation(..., texture: sheet)` or `NeoAnimation.FromGrid(sheet, cellSize, frameDuration)`; the animator swaps the sprite's texture while such a clip plays and swaps back on the next texture-less clip. texture-less clips never touch `Texture` otherwise, so code that sets it manually keeps working
 - `NeoAnimator` no longer throws when the object has no `NeoSpriteRenderer`; frames just don't draw until one is added
 - the state machine docs are rewritten as quickstart + recipes + reference
+
+Added a color field to `SpriteSpec` so that people no longer needs to draw separate color textures to indicate different color tiles. Just set the `Color` field in the sprite spec and it'll apply automatically to `NeoSpriteRenderer`'s field and the rendering'll do its job.

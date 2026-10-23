@@ -11,7 +11,8 @@ public sealed record SpriteSpec(
     int Order = 0, 
     int Layer = 1, 
     Vector2? Anchor = null, 
-    TileRect? Source = null
+    TileRect? Source = null,
+    NeoColor Color = null // tint; null keeps the renderer's default (white = untinted)
 ) : INeoSpec
 {
     public void Apply(NeoObject target)
@@ -25,6 +26,7 @@ public sealed record SpriteSpec(
         };
         if (Anchor is Vector2 anchor) renderer.Anchor = anchor;
         if (Source is TileRect source) renderer.SourceRectangle = new Rectangle(source.X, source.Y, source.Width, source.Height);
+        if (Color is not null) renderer.Color = Color.ToColor();
         target.AddComponent(renderer);
     }
 }
