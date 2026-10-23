@@ -76,7 +76,7 @@ public class NeoFlexBox : NeoPanel
             if (!child.Visible) continue;
 
             float main = FillsMain(child) ? fillShare : Main(child.ScreenTransform.DesiredSize);
-            bool stretch = FillsCross(child) || Align is NeoFlexAlign.Stretch or NeoFlexAlign.SpaceBetween;
+            bool stretch = FillsCross(child) || Align == NeoFlexAlign.Stretch;
             float cross = stretch ? innerCross : Cross(child.ScreenTransform.DesiredSize);
             float crossOffset = Align switch
             {

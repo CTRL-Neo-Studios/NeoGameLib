@@ -974,3 +974,18 @@ State machine + animator controller was too hard to setup, as well as animation 
 Added a color field to `SpriteSpec` so that people no longer needs to draw separate color textures to indicate different color tiles. Just set the `color` field in the sprite spec and it'll apply automatically to `NeoSpriteRenderer`'s field and the rendering'll do its job. format and rules: "SpriteSpec.color" in [specs-serialization-and-creation-instr.md](specs-serialization-and-creation-instr.md).
 
 UI docs moved to [ui-instr.md](ui-instr.md) and got rewritten, because the old 0.3.x examples set `Transform` on UI elements, which never existed (it's `ScreenTransform`), so none of them compiled. every block in the new file compiles, and it lists what the elements DON'T do (clipping, text wrapping, panel borders, image auto-size, keyboard focus, ...) so nobody goes looking for them again.
+
+---
+
+## [0.4.4] UI that behaves like html/css (BREAKING defaults)
+
+I rebuilt the Zelda HUD in my midterm project and wrote it the way I'd write a webpage, and it came out as a black box half off the screen with a white rectangle on it. not my code's fault (ok, partially), the defaults were just nothing like the web. so now they are:
+
+- `Anchor` and `Pivot` default to (0, 0): an element sits at its parent's top-left + `Position`, like css. set both to 0.5 to center
+- new default sizing mode `Auto` (css `width: auto`): uses `Size` per axis when it's set, wraps the content otherwise. panels and flexboxes with no `Size` wrap their children now instead of being 0x0
+- `NeoPanel`/`NeoFlexBox` are transparent by default (they were white)
+- `NeoImage` sizes to its texture like an `<img>`
+- `Visible = false` is `display: none` now: hidden elements don't update either, so hidden buttons can't be clicked
+- `Align = SpaceBetween` doesn't stretch on the cross axis anymore (it behaves like `Start`)
+
+old UI code: add `Anchor = new(0.5f), Pivot = new(0.5f)` where you relied on centering, and `Color = Color.White` where you relied on the white panel. the table at the top of [ui-instr.md](ui-instr.md) has the full before/after.

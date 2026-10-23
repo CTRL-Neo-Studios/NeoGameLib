@@ -5,7 +5,8 @@ namespace NeoGameLib.NeoUI.Elements;
 
 public class NeoPanel : NeoUIElement
 {
-    public Color Color { get; set; } = Color.White;
+    /// <summary>Background color. Transparent (no background) by default, like a css div.</summary>
+    public Color Color { get; set; } = Color.Transparent;
 
     public NeoPadding Padding { get; set; }
 

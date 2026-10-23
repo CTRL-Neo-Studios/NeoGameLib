@@ -21,12 +21,6 @@ public class NeoButton : NeoUIElement
     public Color HoverColor { get; set; } = Color.LightGray;
     public Color PressedColor { get; set; } = Color.Gray;
 
-    public NeoButton()
-    {
-        ScreenTransform.WidthMode = NeoUISizing.Fit;
-        ScreenTransform.HeightMode = NeoUISizing.Fit;
-    }
-
     /// <summary>True when the mouse cursor is inside this element's bounds.</summary>
     public bool Hovered { get; private set; }
 

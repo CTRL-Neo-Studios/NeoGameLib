@@ -6,12 +6,30 @@ note to future self: every code block in this file was compiled against the actu
 
 ---
 
+## [0.4.4] it behaves like html/css now
+
+if you know web dev, the defaults should already be what you expect
+
+so this just works, no `Size`/`WidthMode`/`Color` needed:
+
+```csharp
+NeoFlexBox row = new() { Align = NeoFlexAlign.Center, Gap = 2 }; // transparent, wraps its children, sits at the top-left
+row.Children.Add(new NeoImage { Texture = Content.Load<Texture2D>("Sprites/Inventory/gem") }); // as big as the texture
+row.Children.Add(new NeoLabel { Text = "X0", Font = font });
+```
+
+to upgrade old UI code: put `Anchor = new(0.5f), Pivot = new(0.5f)` back on anything that relied on being centered, `Color = Color.White` on panels that relied on the white default, and `Enabled = false` on top of `Visible = false` is no longer needed.
+
+(object initializers like `new NeoLabel { Text = "X0" }` vs setting properties after `new()` make no difference at all: an initializer IS "construct, then set each property". my HUD broke because of the old defaults above, not because of how I wrote it.)
+
+---
+
 ## The tree
 
 ```
 NeoGame.UIBus
  └─ NeoCanvas            (a root, one per HUD/menu/layer, never a child)
-     └─ NeoPanel         (colored box, has Padding)
+     └─ NeoPanel         (a div: optional background Color, has Padding)
          ├─ NeoLabel     (text)
          ├─ NeoButton    (clickable text)
          ├─ NeoImage     (texture)
@@ -29,7 +47,7 @@ SpriteFont font = Content.Load<SpriteFont>("fonts/ui");
 NeoCanvas canvas = new();
 NeoPanel panel = new()
 {
-    ScreenTransform = { Position = new Vector2(10, 10), Size = new Vector2(200, 100), Anchor = Vector2.Zero, Pivot = Vector2.Zero },
+    ScreenTransform = { Position = new Vector2(10, 10), Size = new Vector2(200, 100) }, // 10,10 from the canvas's top-left
     Color = Color.Gray
 };
 NeoLabel label = new() { Text = "HP 100", Font = font, Color = Color.White }; // Font is borrowed, never disposed by the UI
@@ -59,7 +77,7 @@ NeoPanel badge = new()
         Size = new Vector2(64, 64),
         Anchor = new Vector2(1, 0), Pivot = new Vector2(1, 0), // top-right corner
         Position = new Vector2(-8, 8),
-        WidthMode = NeoUISizing.Fixed, HeightMode = NeoUISizing.Fixed,
+        WidthMode = NeoUISizing.Fixed, HeightMode = NeoUISizing.Fixed, // optional here, Auto uses Size anyway once it's set
         Rotation = MathHelper.ToRadians(15), Scale = new Vector2(1.2f) // visual only
     }
 };
@@ -72,11 +90,11 @@ it inherits the world `Transform`, so `Position`, `Rotation`, `Scale` and the Up
 
 | member | what it does |
 |---|---|
-| `Size` | the box size in UI units, used when the mode is `Fixed`. non-negative |
-| `Anchor` | the point on the PARENT's inner box this element hangs from, 0-1 per axis. default (0.5, 0.5) = center |
-| `Pivot` | the point on THIS box that sits on the anchor, 0-1 per axis. default (0.5, 0.5) = center |
-| `Position` | offset from the anchor, in UI units |
-| `WidthMode` / `HeightMode` | `Fixed`, `Fill` or `Fit`, see Sizing |
+| `Size` | the box size in UI units. with the default `Auto` mode an axis left at 0 sizes to the content instead. non-negative |
+| `Anchor` | the point on the PARENT's inner box this element hangs from, 0-1 per axis. default (0, 0) = top-left |
+| `Pivot` | the point on THIS box that sits on the anchor, 0-1 per axis. default (0, 0) = top-left |
+| `Position` | offset from the anchor, in UI units. with the defaults that's just "offset from the parent's top-left", like css `top`/`left` |
+| `WidthMode` / `HeightMode` | `Auto` (default), `Fixed`, `Fill` or `Fit`, see Sizing |
 | `Rotation` / `Scale` | visual only, see below |
 | `LayoutPosition` / `LayoutSize` | computed top-left and size from the last update/draw, in canvas units. read-only |
 | `DesiredSize` | what the element asked for during measuring. read-only |
@@ -87,7 +105,7 @@ the placement formula:
 top-left = parent inner top-left + parent inner size * Anchor + Position - own size * Pivot
 ```
 
-so with the defaults (both 0.5) an element sits dead center: a 200x100 panel on an 800x600 canvas lands at (300, 250). for top-left placement like a normal person, set both `Anchor` and `Pivot` to `Vector2.Zero`.
+with the defaults (both 0) an element sits at the parent's top-left plus `Position`. to center something, set both to 0.5: a 200x100 panel on an 800x600 canvas lands at (300, 250). (1, 0) for both = top-right corner, (0.5, 1) = bottom-center, and so on.
 
 - "inner box" = the parent's box minus its `Padding` (panels and flexboxes only)
 - anchors and pivots outside 0-1 throw, and so do negative sizes
@@ -104,21 +122,21 @@ they work like a CSS transform: the element and its children turn/scale around t
 
 ---
 
-## Sizing: Fixed, Fill, Fit
+## Sizing: Auto, Fixed, Fill, Fit
 
 every element picks its size per axis with `ScreenTransform.WidthMode` and `ScreenTransform.HeightMode`:
 
-- `Fixed` (default): use `Size`
+- `Auto` (default): like css `width: auto`. use `Size` on that axis when it's set (above 0), otherwise wrap the content: the measured text for labels/buttons, the texture for images, or the smallest box that holds all visible children, plus `Padding`
+- `Fixed`: always use `Size`, even when it's 0
 - `Fill`: take the parent's full inner length. inside a `NeoFlexBox` it shares the leftover space on the main axis instead (see FlexBox)
-- `Fit`: wrap the content: the measured text for labels/buttons, or the smallest box that holds all visible children, plus `Padding`
+- `Fit`: always wrap the content, ignoring `Size`
 
-labels and buttons start as `Fit` on both axes. this replaces the old `AutoSize` flag. to give a button a fixed size, set the mode back to `Fixed` and set `Size`.
+so most of the time you don't touch the modes at all: leave `Size` alone to wrap, set it to pin the size, and it works per axis (`Size = new(100, 0)` = 100 wide, as tall as the content).
 
 ```csharp
-// a panel that wraps its children. no flexbox
+// a panel that wraps its children. no flexbox, no modes needed
 NeoPanel card = new()
 {
-    ScreenTransform = { WidthMode = NeoUISizing.Fit, HeightMode = NeoUISizing.Fit },
     Color = Color.Gray,
     Padding = new NeoPadding(16, 8) // 16 left and right, 8 top and bottom
 };
@@ -129,8 +147,8 @@ a 100x20 label in that card comes out as a 132x36 card with the label at (16, 8)
 
 the gotchas:
 
-- `Fit` has nothing to measure on a plain `NeoPanel` with no children, or on a `NeoImage` (images don't know their texture size, see NeoImage), so those come out 0x0 and draw nothing
-- `Fit` around a `Fill` child is circular: the parent asks the child how big it is, and the child answers "as big as you". the child's `Size` is what gets measured, which is (0, 0) by default, so both collapse to 0x0. give the `Fill` child a `Size` to act as its minimum, or don't nest them like that
+- an element with nothing to measure (a panel with no children and no `Size`, a label with no `Font`, an image with no `Texture`) is 0x0 and draws nothing
+- a wrapping parent around a `Fill` child wraps the child's content (like css), then the child stretches to that. with an empty `Fill` child there's nothing to wrap, so give the parent a `Size`
 - on a canvas, `Fill` = the whole canvas (minus nothing, canvases have no padding)
 
 ### Padding
@@ -161,7 +179,7 @@ NeoFlexBox menu = new()
     Gap = 8, Padding = 12,
     Justify = NeoFlexAlign.Center,
     Align = NeoFlexAlign.Stretch,
-    ScreenTransform = { WidthMode = NeoUISizing.Fit, HeightMode = NeoUISizing.Fit },
+    // no Size: it wraps its buttons + gap + padding
     Color = Color.DarkSlateGray
 };
 menu.Children.Add(new NeoButton { Text = "Play", Font = font });
@@ -183,7 +201,7 @@ menu.Children.Add(new NeoButton { Text = "Quit", Font = font });
 | `Start` | packed at the start | top (row) / left (column) |
 | `Center` | packed in the middle | centered |
 | `End` | packed at the end | bottom (row) / right (column) |
-| `SpaceBetween` | first at the start, last at the end, leftover split into the gaps | **same as `Stretch`** |
+| `SpaceBetween` | first at the start, last at the end, leftover split into the gaps | same as `Start` (css has no cross-axis space-between either) |
 | `Stretch` | **same as `Start`**, children keep their size. use `Fill` children to grow along the main axis | every child = the full inner cross size |
 
 When `Direction = Column`:
@@ -239,7 +257,7 @@ Growing Children along the axes w/ `Fill`:
 
 - `Fill` on the main axis splits the leftover space evenly between all `Fill` children, and then `Justify` has no leftover left to move things around with
 - `Fill` on the cross axis stretches that one child, whatever `Align` says
-- a `Fit` flexbox wraps its children + gaps + padding: two 20-tall children with `Gap = 8` and `Padding = 12` make a 72-tall column
+- a flexbox with no `Size` wraps its children + gaps + padding: two 20-tall children with `Gap = 8` and `Padding = 12` make a 72-tall column
 - hidden children (`Visible = false`) take no space
 - children never wrap onto a second line. too many children just overflow the box, and nothing clips them
 
@@ -249,11 +267,11 @@ Growing Children along the axes w/ `Fill`:
 
 ### NeoPanel
 
-a solid colored box behind its children.
+a box behind its children, like a `div`.
 
 | property | default | |
 |---|---|---|
-| `Color` | `Color.White` | `Color.Transparent` (alpha 0) skips drawing, handy for invisible layout boxes |
+| `Color` | `Color.Transparent` | the background. transparent = draws nothing, so a panel without a `Color` is a pure layout box |
 | `Padding` | 0 | see Padding |
 
 it's a flat rectangle: no border, no rounded corners, no texture, no 9-slice. for a textured background put a `NeoImage` in it as the first child with `Fill` on both axes.
@@ -266,8 +284,8 @@ it's a flat rectangle: no border, no rounded corners, no texture, no 9-slice. fo
 | `Text` | `""` | |
 | `Color` | `Color.White` | |
 
-- `Fit` on both axes by default, sized to `Font.MeasureString(Text)`
-- draws at its native size from the top-left of its box: no wrapping, no scaling, no clipping, no alignment inside a bigger box. if you set the label to `Fixed`/`Fill`, the box gets bigger but the text stays in the top-left corner
+- sized to `Font.MeasureString(Text)` by default (`Auto` with no `Size`)
+- draws at its native size from the top-left of its box: no wrapping, no scaling, no clipping, no alignment inside a bigger box. if you give the label a bigger `Size` or `Fill`, the box gets bigger but the text stays in the top-left corner
 - `\n` in `Text` makes multiple lines, since that's what `SpriteFont` does
 
 ### NeoButton
@@ -275,7 +293,7 @@ it's a flat rectangle: no border, no rounded corners, no texture, no 9-slice. fo
 a clickable label. it reads the `Input` facade, so it needs a running `NeoGame`.
 
 ```csharp
-NeoButton play = new() { Text = "Play", Font = font, ScreenTransform = { Anchor = Vector2.Zero, Pivot = Vector2.Zero } }; // sizes itself to the text
+NeoButton play = new() { Text = "Play", Font = font }; // sizes itself to the text
 play.OnClick = () => { /* start game */ };
 panel.Children.Add(play);
 ```
@@ -290,9 +308,9 @@ panel.Children.Add(play);
 | `Hovered` | | read-only, true while the mouse is over the drawn box |
 
 - it's text only: no background, no border. put it in a `NeoPanel` for that
-- unlike the label, the text is centered in the button's box, so a `Fixed` button works the way you'd expect
+- unlike the label, the text is centered in the button's box, so a button with a `Size` works the way you'd expect
 - mouse only. there's no keyboard/gamepad navigation or focus
-- **`Visible = false` does NOT stop it from being clicked.** hidden elements still update. use `Enabled = false` (or both), see Enabled vs Visible
+- a hidden (`Visible = false`) or disabled (`Enabled = false`) button can't be clicked
 
 ### NeoImage
 
@@ -302,8 +320,8 @@ panel.Children.Add(play);
 | `SourceRectangle` | null | part of the texture to draw, null = whole texture. negative values throw |
 | `Color` | `Color.White` | tint |
 
-- the texture is stretched to the element's box
-- **an image has no size of its own.** `Fit` doesn't look at the texture, so a default `NeoImage` is 0x0 and draws nothing. give it a `Size` (e.g. `new Vector2(texture.Width, texture.Height)`) or `Fill`
+- sized to its texture by default, like an `<img>` without width/height: the `SourceRectangle` size if set, else the whole texture
+- set `Size` to scale it (the texture is stretched to the box), or one axis of it: `Size = new(36, 0)` = 36 wide, texture height
 - no aspect-ratio keeping, no 9-slice
 
 ### custom elements
@@ -328,7 +346,7 @@ public class HealthBar : NeoUIElement
         spriteBatch.Draw(Pixel, ScreenTransform.LayoutPosition, null, Color.Red, 0, Vector2.Zero, size, SpriteEffects.None, 0);
     }
 
-    protected override Vector2 MeasureContent() => new(100, 8); // what Fit wraps
+    protected override Vector2 MeasureContent() => new(100, 8); // what Auto/Fit wrap when Size isn't set
 }
 ```
 
@@ -343,12 +361,12 @@ public class HealthBar : NeoUIElement
 
 | | `Enabled = false` | `Visible = false` |
 |---|---|---|
-| `OnUpdate` (this + children) | skipped | **still runs** |
+| `OnUpdate` (this + children) | skipped | skipped |
 | drawing (this + children) | still draws | skipped |
 | takes layout space | yes | no |
-| button clicks | no | **yes** |
+| button clicks | no | no |
 
-for "this menu is closed", set both, or just `Unsubscribe` the canvas.
+`Visible = false` is css `display: none`. `Enabled = false` is a greyed-out-but-still-there element (it does NOT change colors for you though).
 
 ---
 
@@ -407,4 +425,3 @@ stuff people (me) went looking for and didn't find. if you need one of these, it
 - panel borders, rounded corners, 9-slice, textured panels (use a `Fill` `NeoImage` child)
 - button backgrounds (wrap it in a panel), keyboard/gamepad focus and navigation
 - text input fields, sliders, checkboxes, scroll views
-- automatic image sizing from the texture

@@ -29,6 +29,9 @@ public class NeoImage : NeoUIElement
         }
     }
 
+    /// <summary>The texture's size (or SourceRectangle's), like an html img's intrinsic size. Set Size to override it.</summary>
+    protected override Vector2 MeasureContent() => (Texture == null) ? Vector2.Zero : (SourceRectangle?.Size ?? Texture.Bounds.Size).ToVector2();
+
     protected override void OnDraw(SpriteBatch spriteBatch)
     {
         Vector2 size = ScreenTransform.LayoutSize;
