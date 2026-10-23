@@ -258,7 +258,7 @@ public class NeoGame : Game
     /// <summary>
     /// this is the screen-space equivalent of OnDraw and it runs after all canvases in window pixels with an identity matrix, so it ignores the camera and the canvas scale.
     /// </summary>
-    /// <remarks>See instructions.md 0.3.0 Actual Implementation section beginning for more info.</remarks>
+    /// <remarks>See ui-instr.md "OnDrawUI" for more info.</remarks>
     protected virtual void OnDrawUI(SpriteBatch spriteBatch, GameTime gameTime) { }
 }
 
