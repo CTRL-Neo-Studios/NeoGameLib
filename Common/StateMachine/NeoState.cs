@@ -18,7 +18,7 @@ public abstract class NeoState<TOwner>
     /// <summary>Fires when the machine switches into this state, after the previous state's OnExit.</summary>
     public virtual void OnEnter() { }
 
-    /// <summary>Fires every <see cref="NeoStateMachine{TOwner}.Update"/> while this is the current state, including the tick it was entered on.</summary>
+    /// <summary>Fires every <see cref="NeoStateMachine{TOwner}.Update"/> while this is the current state. Also fires on the entry tick for transitions, but not when the previous state switches via ChangeState from its own OnUpdate (then it starts next tick).</summary>
     public virtual void OnUpdate(GameTime gameTime) { }
 
     /// <summary>Fires when the machine transitions away from this state or stops.</summary>

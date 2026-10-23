@@ -1,5 +1,6 @@
 using System;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using NeoGameLib.NeoGO;
 
 namespace NeoGameLib.NeoRendering.Animations;
@@ -7,9 +8,12 @@ namespace NeoGameLib.NeoRendering.Animations;
 // note to future self:
 // NeoAnimator works by setting source rectangle in the update loop to the frames defined in the NeoAnimation object.
 // pause = set Enabled to false, resume = set it back
+// the sprite renderer is looked up lazily, so the animator doesn't care whether it was added before or after
 public class NeoAnimator : NeoComponent
 {
     private NeoSpriteRenderer _renderer;
+    private Texture2D _baseTexture;
+    private bool _swapped; // true while the renderer shows a clip's texture instead of its own
     private NeoAnimation _animation;
     private TimeSpan _elapsed;
     private TimeSpan _frameDuration;
@@ -29,24 +33,30 @@ public class NeoAnimator : NeoComponent
     // for attack->idle style switching, NeoAnimatorController + IsFinished is the cleaner way; this stays for one-off reactions
     public Action OnAnimationFinished;
 
-    public override void OnAwake()
+    // finds the sprite renderer on first use and again if it was removed/replaced
+    private NeoSpriteRenderer Renderer()
     {
-        _renderer = ParentObject.GetComponent<NeoSpriteRenderer>();
-        if (_renderer is null)
-            throw new Exception("A Sprite Renderer component is required on an object with NeoAnimator");
+        if (_renderer is not { IsAttached: true })
+        {
+            _renderer = ParentObject.GetComponent<NeoSpriteRenderer>();
+            _swapped = false; // a new renderer keeps its own texture until a textured clip plays
+        }
+        return _renderer;
     }
 
     /// <param name="animation">the clip to play</param>
     /// <param name="restart">replay from frame 0 even when this clip is already playing, e.g. a second attack right after the first</param>
     public void Play(NeoAnimation animation, bool restart = false)
     {
-        if (animation is null || animation.Frames.Count == 0)
+        if (animation is null || animation.Frames is null || animation.Frames.Count == 0)
             throw new Exception("Playing a null or empty animation. SOmehow you've managed to do that but congrats");
 
-        // note to future self:
-        // prevents same animation called in update frame via Play func in case if you fuck up.
-        // If that's what you do intend, pass restart: true, Stop() the animation first, or Play() a different animation
-        if (_animation == animation && !restart) return;
+        if (_animation == animation && !restart)
+        {
+            // same clip, but the renderer may have been added (or re-added) since: apply the frame again
+            ApplyFrame();
+            return;
+        }
 
         _animation = animation;
         CurrentFrameIndex = 0;
@@ -64,7 +74,7 @@ public class NeoAnimator : NeoComponent
 
     public override void OnUpdate(GameTime gameTime)
     {
-        if (_animation is null || _renderer is null) return;
+        if (_animation is null) return;
         _elapsed += gameTime.ElapsedGameTime;
 
         // comparing in ticks
@@ -88,10 +98,14 @@ public class NeoAnimator : NeoComponent
                     CurrentFrameIndex = _animation.Frames.Count - 1;
                     ApplyFrame();
                 }
-                else if (_renderer is not null)
+                else
                 {
-                    // vanish when finish play.
-                    _renderer.SourceRectangle = Rectangle.Empty;
+                    NeoSpriteRenderer renderer = Renderer();
+                    if (renderer is not null)
+                    {
+                        // vanish when finish play.
+                        renderer.SourceRectangle = Rectangle.Empty;
+                    }
                 }
 
                 if (!_finishedFired)
@@ -109,7 +123,24 @@ public class NeoAnimator : NeoComponent
 
     private void ApplyFrame()
     {
-        if (_renderer is not null)
-            _renderer.SourceRectangle = _animation.Frames[CurrentFrameIndex];
+        NeoSpriteRenderer renderer = Renderer();
+        if (renderer is null) return;
+
+        if (_animation.Texture is not null)
+        {
+            if (!_swapped)
+            {
+                _baseTexture = renderer.Texture;
+                _swapped = true;
+            }
+            renderer.Texture = _animation.Texture;
+        }
+        else if (_swapped)
+        {
+            renderer.Texture = _baseTexture;
+            _swapped = false;
+        }
+
+        renderer.SourceRectangle = _animation.Frames[CurrentFrameIndex];
     }
 }

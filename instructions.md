@@ -962,61 +962,117 @@ also, a batched per-layer tilemap renderer needs to be implemented in the future
 
 ## [0.4.0] State Machines
 
-originally I wanted to evolve the animator into a unity-style animator state machine, but then it occurred to me that enemy AI needs state machines too. So  I'm making the the state machine be standalone.
+a standalone (non-component) state machine. states are either lambdas or classes; for anything simple you don't have to subclass anything.
+
+### quickstart: lambda states
 
 ```csharp
 public class SlimeBrain : NeoComponent
 {
     public NeoStateMachine<SlimeBrain> Fsm;
-    public int Hp = 3;
-    public bool JustAttacked; // set by Chase when it bites, cleared next tick
-    public float DistanceToPlayer() => /* ... */ 0;
+    public NeoState<SlimeBrain> IdleState, ChaseState; // fields, so other components can compare against them
+    public bool JustAttacked;
 
-    public override void OnStart()
+    // your own game code
+    public NeoAnimator Animator;
+    public NeoAnimation IdleClip, BiteClip;
+    float DistanceToPlayer() => /* ... */ 0;
+    void MoveTowardsPlayer(GameTime gameTime) { /* ... */ }
+
+    public override void OnAwake() // build here so other components can read Fsm and the state fields right away
     {
         Fsm = new(this);
-        Patrol patrol = Fsm.Add(new Patrol());
-        Chase chase = Fsm.Add(new Chase());
-        Dead dead = Fsm.Add(new Dead());
 
-        Fsm.AddTransition(patrol, chase, () => DistanceToPlayer() < 96);
-        Fsm.AddTransition(chase, patrol, () => DistanceToPlayer() > 160);
-        Fsm.AddAnyTransition(dead, () => Hp <= 0);
-        Fsm.Start(patrol);
+        IdleState = Fsm.AddState("idle",
+            onEnter: () => Animator.Play(IdleClip));
+        ChaseState = Fsm.AddState("chase",
+            onUpdate: gameTime => MoveTowardsPlayer(gameTime));
+
+        Fsm.AddTransition(IdleState, ChaseState, () => DistanceToPlayer() < 96);
+        Fsm.AddTransition(ChaseState, IdleState, () => DistanceToPlayer() > 160);
     }
+
+    public override void OnStart() => Fsm.Start(IdleState); // start once every component exists
 
     public override void OnUpdate(GameTime gameTime) => Fsm.Update(gameTime);
 }
-
-public class Chase : NeoState<SlimeBrain>
-{
-    public override void OnUpdate(GameTime gameTime) { /* Owner.ParentTransform ... move towards player */ }
-}
 ```
 
-### Animator state machines
+- `AddState` takes an optional `name` plus optional `onEnter` / `onUpdate` / `onExit` lambdas. all of them optional: a state can be a plain named step
+- transitions are checked once per `Fsm.Update`: any-state transitions first, then the current state's, in add order, first match wins
+- tick the machine yourself, it's not a component
+- conditions must be pure: never call `ChangeState`/`Stop`/`Start` inside one
+- lambda states are all the same type, so compare them by reference (`Fsm.Current == ChaseState`), not `is Chase`. states that need `is`-style identity should be classes, see below
 
-`NeoAnimator` still plays exactly one clip. `NeoAnimatorController` owns a `NeoStateMachine<NeoAnimator>` whose `NeoAnimationState`s play their clip on enter. `NeoAnimator.IsFinished` (true once a non-looping clip is past its last frame) replaces the `OnAnimationFinished = () => Play(idle)` dance:
+### recipe: play clips from brain states (no controller)
+
+if a clip only needs to play while some state is current, skip `NeoAnimatorController` and drive the animator from the state:
+
+```csharp
+// inside SlimeBrain.OnAwake
+NeoState<SlimeBrain> bite = Fsm.AddState("bite",
+    onEnter: () => Animator.Play(BiteClip)); // BiteClip made with loop: false
+Fsm.AddTransition(bite, IdleState, () => Animator.IsFinished);
+```
+
+### recipe: animator state machines
+
+`NeoAnimatorController` owns a `NeoStateMachine<NeoAnimator>` whose `NeoAnimationState`s play their clip on enter. the controller finds or adds the `NeoAnimator` itself, and the animator finds the sprite renderer whenever it's added, so add order doesn't matter. use this *instead of* playing clips from the brain's `onEnter` (leave the brain's `Animator` null and drop those `Play` calls), not on top of it:
 
 ```csharp
 NeoObject slime = World.Instantiate("Slime");
-slime.AddComponent(new NeoSpriteRenderer(RenderBus, sheet));
-NeoAnimator animator = slime.AddComponent<NeoAnimator>();
-SlimeBrain brain = slime.AddComponent<SlimeBrain>();
-NeoAnimatorController anim = slime.AddComponent<NeoAnimatorController>(); // after the brain, so it reads this tick's state
+slime.AddComponent(new NeoSpriteRenderer(RenderBus, sheet)); // your sprite, still yours
+SlimeBrain brain = slime.AddComponent<SlimeBrain>();          // states are fields, built in OnAwake
+NeoAnimatorController anim = slime.AddComponent<NeoAnimatorController>(); // after the brain; adds the NeoAnimator itself
 
 NeoAnimationState idle = anim.AddState(idleClip);
 NeoAnimationState hop = anim.AddState(hopClip);
 NeoAnimationState bite = anim.AddState(biteClip); // loop: false
 
-anim.Machine.AddTransition(idle, hop, () => brain.Fsm.Current is Chase);
-anim.Machine.AddTransition(hop, idle, () => brain.Fsm.Current is Patrol);
+anim.Machine.AddTransition(idle, hop, () => brain.Fsm.Current == brain.ChaseState);
+anim.Machine.AddTransition(hop, idle, () => brain.Fsm.Current == brain.IdleState);
 anim.Machine.AddAnyTransition(bite, () => brain.JustAttacked);
-anim.Machine.AddTransition(bite, hop, () => animator.IsFinished);
+anim.Machine.AddTransition(bite, hop, () => anim.Animator.IsFinished);
 anim.Machine.Start(idle);
 ```
 
-the AI and the animation stay two separate machines and the animation just reads the brain
+- the controller inserts the animator right before itself so `IsFinished` is fresh when the machine polls it
+- `NeoAnimationState` plays its clip on enter and restarts it if the state is re-entered
+
+### per-clip textures
+
+give a clip a texture and the animator swaps the sprite to it while it plays; the next texture-less clip swaps back to the texture the sprite had before. texture-less clips otherwise leave `Texture` alone, so setting it yourself still works:
+
+```csharp
+NeoAnimation run = NeoAnimation.FromGrid(runSheet, new Point(32, 32), 0.1f); // grid size is worked out from the sheet
+NeoAnimation idle = new(idleFrames, 0.2f, texture: idleSheet);
+```
+
+### recipe: class states
+
+when a state carries its own data or behavior, subclass `NeoState<TOwner>` instead:
+
+```csharp
+public class Chase : NeoState<SlimeBrain>
+{
+    public override void OnEnter() { /* reset chase data */ }
+    public override void OnUpdate(GameTime gameTime) { /* Owner.ParentTransform ... move towards player */ }
+    public override void OnExit() { /* stop chase fx */ }
+}
+// then as before: Chase chase = Fsm.Add(new Chase());
+```
+
+class states keep their own type, so `Fsm.Current is Chase` works here.
+
+### reference
+
+- `Add(state)` / `AddState(...)` register a state; states belong to one machine only
+- `AddTransition(from, to, when)` / `AddAnyTransition(to, when)` add condition transitions (self-transitions throw, use `ChangeState(s, restart: true)`)
+- `Start(state)` enters a state, re-entering it even if it's already current; `ChangeState(next)` skips when it's already current
+- `Stop()` exits the current state; `IsRunning`, `Current`, `Previous`, `TimeInState` inspect the machine; `OnStateChanged(from, to)` fires after each switch
+- `ChangeState`/`Start`/`Stop` called from `OnEnter`/`OnExit`/`OnStateChanged` are queued, the last request wins; a chain longer than 32 changes throws
+- `OnEnter` fires after the previous state's `OnExit`; `OnUpdate` fires on the entry tick for transitions, but not when a state switches via `ChangeState` from its own `OnUpdate` (the new state starts next tick)
+- the machine is single-threaded; tick it from one component only
 
 // TODO: hierarchical machines (a state can own its own `NeoStateMachine` if ever needed), blend trees (sprites don't blend), and data-authored machines in neoprefabs (conditions are lambdas, so that would need the parameter system back; maybe later on top of the same core).
 
@@ -1092,3 +1148,13 @@ a `BoxColliderSpec` inside a collider group's `specs` now means "the collider of
 - several `BoxColliderSpec`s = several boxes per merged object, and the merge axes are the ones ALL of them allow
 - every other group spec still applies once per merged object, same as before
 - put upper and lower slabs in separate groups: the shape belongs to the group, not the prefab
+
+---
+
+# 0.4.3 (state machine DX)
+
+- lambda states: `fsm.AddState(name, onEnter, onUpdate, onExit)` — no subclass needed for simple states
+- `NeoAnimatorController` finds or adds the `NeoAnimator` itself (and keeps it before itself), and `NeoAnimator` finds the sprite renderer whenever it's added, so add order no longer throws
+- clips can carry a texture: `new NeoAnimation(..., texture: sheet)` or `NeoAnimation.FromGrid(sheet, cellSize, frameDuration)`; the animator swaps the sprite's texture while such a clip plays and swaps back on the next texture-less clip. texture-less clips never touch `Texture` otherwise, so code that sets it manually keeps working
+- `NeoAnimator` no longer throws when the object has no `NeoSpriteRenderer`; frames just don't draw until one is added
+- the state machine docs are rewritten as quickstart + recipes + reference
