@@ -10,7 +10,7 @@ namespace NeoGameLib.Common.StateMachine;
 
 public class NeoStateMachine<TOwner>
 {
-    // a chain of changes requested from OnEnter/OnExit longer than this is two states bouncing off each other forever
+    // a chain of changes requested from OnEnter/OnExit/OnStateChanged longer than this is two states bouncing off each other forever
     private const int MaxChainedChanges = 32;
 
     private readonly List<(NeoState<TOwner> To, Func<bool> When)> _anyTransitions = new();
@@ -48,8 +48,14 @@ public class NeoStateMachine<TOwner>
         return state;
     }
 
+    /// <summary>Registers a state built from lambdas and returns it. name only feeds ToString, so debug logs can name the state.</summary>
+    public NeoState<TOwner> AddState(string name = null, Action onEnter = null, Action<GameTime> onUpdate = null, Action onExit = null)
+    {
+        return Add(new NeoLambdaState<TOwner>(name, onEnter, onUpdate, onExit));
+    }
+
     /// <summary>Switches from → to on the first Update where <paramref name="when"/> returns true while in <paramref name="from"/>.</summary>
-    /// <remarks>Checked in add order, after every any-state transition. First match wins, and at most one transition fires per Update.</remarks>
+    /// <remarks>Checked in add order, after every any-state transition. First match wins; at most one condition transition fires per Update (states can still switch more than once per tick through ChangeState/Start/Stop).</remarks>
     public void AddTransition(NeoState<TOwner> from, NeoState<TOwner> to, Func<bool> when)
     {
         Require(from);
@@ -126,7 +132,7 @@ public class NeoStateMachine<TOwner>
         for (int chain = 0; ; chain++)
         {
             if (chain == MaxChainedChanges)
-                throw new InvalidOperationException($"more than {MaxChainedChanges} state changes chained from OnEnter/OnExit; two states are probably switching to each other forever");
+                throw new InvalidOperationException($"more than {MaxChainedChanges} state changes chained from OnEnter/OnExit/OnStateChanged; two states are probably switching to each other forever");
 
             Switch(next, restart);
             if (!_hasPending) return;
