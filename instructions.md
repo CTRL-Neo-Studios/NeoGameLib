@@ -860,24 +860,9 @@ the schema regenerates on every build and ideally it's editor-only. the game's j
 
 ## [0.4.0] Specs: authoring data
 
-In a better way of putting this (trying to straighten your mind in 2am is hard): a "spec" is a small authoring-data-type that adds components to an object when building a map. they're discovered automatically by the game in that any public non-abstract `INeoSpec` type in the game assembly (or an assembly it references) is accounted for, w/o registration calls. the name of the spec-implemented class is the resulting typing name, or you can use the attribute `[NeoName("Door")]` for a more stable one in case of class name changes; duplicate names will throw an error (You've been warned).
-the spec's constructor params ARE its schema
+In a better way of putting this (trying to straighten your mind in 2am is hard): a "spec" is a small authoring-data-type that adds components to an object when building a map. any public non-abstract `INeoSpec` type in the game is discovered automatically, w/o registration calls, and the spec's constructor params ARE its schema.
 
-```csharp [InsideYourGame.cs]
-public sealed record DoorSpec([property: NeoAsset(typeof(Texture2D))] string Texture, string Level = "level1") : INeoSpec
-{
-    public void Apply(NeoObject target)
-    {
-        target.AddComponent(new NeoSpriteRenderer(NeoGame.Singleton.RenderBus, NeoGame.Singleton.Assets.Load<Texture2D>(Texture)));
-        target.AddComponent(new Door { Level = Level });
-    }
-}
-```
-
-the library ships `SpriteSpec`, `TextSpec`, `BoxColliderSpec` (Size required, Offset/IsTrigger optional), `SpriteColliderSpec`, `CameraSpec` and `TriggerSpec` (below). prefer records over classes-with-setters: property-initializer defaults on a plain class don't survive into the schema.
-
-- missing properties fall back to constructor defaults; unknown properties THROW (typos fail loudly); on net9, params without a default are required. on net8 they quietly become null, so if you care, target net9.
-- unknown members in files throw too, matching the strict schema. MonoGame structs serialize as `{ "x": .., "y": .. }`.
+everything about making them, how custom data types serialize, the built-in specs and the shoot-myself-in-my-fucking-foot-shit is now moved to [specs-serialization-and-creation-instr.md](specs-serialization-and-creation-instr.md). it got too long to write here. In fact I might be refactoring this file much later
 
 ## [0.4.0] Prefab libraries
 
@@ -919,7 +904,7 @@ the library ships `SpriteSpec`, `TextSpec`, `BoxColliderSpec` (Size required, Of
 ```
 
 - layers stack in array order; a legend character maps to a prefab, `null` to empty, keys must be one character, rows may be ragged.
-- an object inherits its prefab's tags + specs, adds its own on top (empty prefab ref = pure tag marker, e.g. spawnpoints). `overrides` shallow-merge top-level properties into entries keyed by their `id` (or spec name without one) -- to change a nested action, replace the whole list as above. `null` resets the entry to spec defaults, unknown keys throw.
+- an object inherits its prefab's tags + specs, adds its own on top (empty prefab ref = pure tag marker, e.g. spawnpoints). `overrides` shallow-merge top-level properties into the prefab's spec entries, see "Specs in files" in [specs-serialization-and-creation-instr.md](specs-serialization-and-creation-instr.md).
 - `SwitchWorldAction` unloads the trigger's own world before loading the target, which destroys the trigger, so any actions after it in the same list don't run. put it last.
 - runtime: `WorldManager.CreateWorld("level1", w => NeoMap.Load("level1").Build(w));`, or `NeoMap.RegisterWorld("level1", "level1")` for the same thing in one call, which is what `LoadWorldAction`/`SwitchWorldAction` use when the world isn't registered yet. building never mutates the map, so one `NeoMap` can build any number of worlds. `NeoMap.FromJson` / `ToJson` exist for editors.
 
@@ -1128,7 +1113,7 @@ there are two kinds of names in data files:
 
 **free text** (no rules): layer names, object names, tags, world names, spec ids. the loader does not resolve the file names nor keys; just keep tags and spec ids the same everywhere you reference them, since they're matched exactly.
 
-spec and action `type`s are C# class names (or `[NeoName("...")]`)
+spec and action `type`s are C# class names (or `[NeoName("...")]`), see [specs-serialization-and-creation-instr.md](specs-serialization-and-creation-instr.md)
 
 ## [0.4.2] Collider group shapes
 
@@ -1161,4 +1146,4 @@ State machine + animator controller was too hard to setup, as well as animation 
 - `NeoAnimator` no longer throws when the object has no `NeoSpriteRenderer`; frames just don't draw until one is added
 - the state machine docs are rewritten as quickstart + recipes + reference
 
-Added a color field to `SpriteSpec` so that people no longer needs to draw separate color textures to indicate different color tiles. Just set the `Color` field in the sprite spec and it'll apply automatically to `NeoSpriteRenderer`'s field and the rendering'll do its job.
+Added a color field to `SpriteSpec` so that people no longer needs to draw separate color textures to indicate different color tiles. Just set the `color` field in the sprite spec and it'll apply automatically to `NeoSpriteRenderer`'s field and the rendering'll do its job. format and rules: "SpriteSpec.color" in [specs-serialization-and-creation-instr.md](specs-serialization-and-creation-instr.md).
