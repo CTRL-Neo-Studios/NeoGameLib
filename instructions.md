@@ -738,7 +738,7 @@ everything about making them, how custom data types serialize, the built-in spec
 
 - layers stack in array order; a legend character maps to a prefab, `null` to empty, keys must be one character, rows may be ragged.
 - an object inherits its prefab's tags + specs, adds its own on top (empty prefab ref = pure tag marker, e.g. spawnpoints). `overrides` shallow-merge top-level properties into the prefab's spec entries, see "Specs in files" in [specs-serialization-and-creation-instr.md](specs-serialization-and-creation-instr.md).
-- `SwitchWorldAction` unloads the trigger's own world before loading the target, which destroys the trigger, so any actions after it in the same list don't run. put it last.
+- `SwitchWorldAction` unloads the trigger's own world before loading the target, which destroys the trigger, so any actions after it in the same list don't run. put it last. (more on actions in "Actions" in [specs-serialization-and-creation-instr.md](specs-serialization-and-creation-instr.md))
 - runtime: `WorldManager.CreateWorld("level1", w => NeoMap.Load("level1").Build(w));`, or `NeoMap.RegisterWorld("level1", "level1")` for the same thing in one call, which is what `LoadWorldAction`/`SwitchWorldAction` use when the world isn't registered yet. building never mutates the map, so one `NeoMap` can build any number of worlds. `NeoMap.FromJson` / `ToJson` exist for editors.
 
 ## [0.4.0] Tags
@@ -751,15 +751,7 @@ every collider has enter/stay/exit events now: the collision bus diffs this fram
 
 `NeoTrigger` is a `NeoBoxCollider` with `IsTrigger = true` (the mover ignores triggers: no push-out, no grounding) that fires action lists when a matching object enters, stays in, or exits its bounds. the tag filter is `null` = anything.
 
-an action is the same idea as a spec, but for behaviour: `INeoAction` types, discovered automatically, stored in map files as `{ "type": ..., "properties": ... }` lists. built-ins:
-
-- `LoadWorldAction { world }` -- loads a world next to the running ones, never unloads anything. registers from the same-named map if needed
-- `SwitchWorldAction { world, unload = null }` -- unloads `unload` (null = the trigger's own world), then loads `world`. list `world` itself in `unload` to restart a level
-- `UnloadWorldAction { world = null }` -- null = the trigger's own world
-- `DestroyAction { target = "self" | "other" }` -- queues the destroy for end of tick
-- `SetEnabledAction { component, enabled = true, target = "self" }` -- matches a component by class name
-
-game-defined actions: `public sealed record SaveGameAction(string Slot) : INeoAction { public void Invoke(NeoActionContext ctx) { ... } }`. `ctx.Self` is the trigger's object, `ctx.Other` the overlapping one. actions run during the collision pass, so loading worlds / destroying objects mid-callback is safe (same guarantee as any collision callback).
+an action is the same idea as a spec, but for behaviour: `INeoAction` types, discovered automatically, stored in map files as `{ "type": ..., "properties": ... }` lists. the built-ins (`LoadWorldAction`, `SwitchWorldAction`, `UnloadWorldAction`, `DestroyAction`, `SetEnabledAction`), making your own, and how triggers fire them are in "Actions" in [specs-serialization-and-creation-instr.md](specs-serialization-and-creation-instr.md).
 
 a door is now data, not code: sprite + `TriggerSpec` + unload/load actions. actions compose into lists, and `OnStay` exists for things like damage-over-time zones.
 

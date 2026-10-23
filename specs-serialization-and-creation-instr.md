@@ -1,6 +1,6 @@
 # Specs: Serialization, Creation, and Custom Stuff
 
-If you're here reading this, you're either gonna be making your own specs, how their data turns into JSON and back, what the schema/editor sees, and the dont-shoot-yourself-in-the-foot parts.
+If you're here reading this, you're either gonna be making your own specs or actions, how their data turns into JSON and back, what the schema/editor sees, and the dont-shoot-yourself-in-the-foot parts.
 
 note to future self: if you're here because a map somehow erred on load, skip to [Ah I've went ahead and shot myself in the foot](#footguns). it's probably, possibly, potentially, and HOPEFULLY one of those. If it's not... pick your poison bruh. .50 cal or .338 Lapua
 
@@ -144,7 +144,7 @@ public sealed record EnemySpec(
 } }
 ```
 
-to run those actions yourself: `foreach (INeoAction a in OnDeath) a.Invoke(new NeoActionContext(self, other));`. game-defined actions follow every rule in this doc too, they're just `INeoAction` instead of `INeoSpec`.
+to run those actions yourself: `foreach (INeoAction a in OnDeath) a.Invoke(new NeoActionContext(self, other));`. game-defined actions follow every rule in this doc too, they're just `INeoAction` instead of `INeoSpec`, see [Actions](#actions).
 
 custom JSON shape with a converter:
 
@@ -220,6 +220,94 @@ texture tinting.
 
 ---
 
+## Actions
+
+an action is the same as a spec, but for behaviour/functions. an action DOES something when it fires (load a level, destroy the coin, open the shop).
+
+| | spec | action |
+|---|---|---|
+| interface | `INeoSpec` | `INeoAction` |
+| runs | once, while the map builds | every time it fires (mostly from a trigger) |
+| method | `Apply(NeoObject target)` | `Invoke(NeoActionContext ctx)` |
+| schema | `spec:<Name>` | `action:<Name>`, listed in `x-neo-actions` |
+| in files | an object's `specs` list | an action list property, like `TriggerSpec`'s `onEnter` |
+
+### the built-ins
+
+| action | properties | what it does |
+|---|---|---|
+| `LoadWorldAction` | `world` (required) | loads a world next to the running ones, never unloads anything. a world that isn't registered yet gets registered from the map with the same name |
+| `SwitchWorldAction` | `world` (required), `unload` (null) | unloads `unload` (null = the trigger's own world, `[]` = nothing), then loads `world` like `LoadWorldAction`. list `world` itself in `unload` to restart a level |
+| `UnloadWorldAction` | `world` (null) | null = the trigger's own world |
+| `DestroyAction` | `target = "self"` | queues `self` or `other` for destruction at the end of the world tick |
+| `SetEnabledAction` | `component` (required), `enabled = true`, `target = "self"` | sets `Enabled` on the first component on the target whose class name matches |
+
+- `target` is `"self"` (the object with the trigger) or `"other"` (whatever walked into it)
+- `SetEnabledAction` matches the EXACT runtime class name, base classes don't count: `"NeoBoxCollider"` won't find a `NeoTrigger`, even though a trigger is a box collider. only the first match is changed
+- `SwitchWorldAction` that unloads its own world destroys the trigger with it, so actions after it in the same list never run. put it last
+- world names are just strings, so a typo'd world isn't caught when the map loads. it's caught when the action fires, mid-game
+
+```json
+{ "type": "TriggerSpec", "properties": {
+    "size": { "x": 32, "y": 32 }, "tag": "Player",
+    "onEnter": [
+      { "type": "DestroyAction", "properties": { "target": "self" } },
+      { "type": "SwitchWorldAction", "properties": { "world": "forest/level2" } }
+    ]
+} }
+```
+
+### making one
+
+```csharp [InsideYourGame.cs]
+[NeoName("Heal")]
+public sealed record HealAction(int Amount = 1, NeoActionTarget Target = NeoActionTarget.Other) : INeoAction
+{
+    public void Invoke(NeoActionContext ctx)
+    {
+        NeoObject target = Target == NeoActionTarget.Self ? ctx.Self : ctx.Other;
+        if (target is null) return;
+        if (target.TryGetComponent(out Health health)) health.Current += Amount;
+    }
+}
+```
+
+```json
+{ "type": "Heal", "properties": { "amount": 3 } }
+```
+
+`NeoActionContext` is all you get:
+
+| member | what it is |
+|---|---|
+| `ctx.Self` | the object the action belongs to. for a trigger: the trigger's object |
+| `ctx.Other` | the other object. for a trigger: whatever overlapped it. can be `null` when you invoke actions yourself, so null-check it like the built-ins do |
+| `ctx.World` | `Self`'s world |
+
+everything else goes through `NeoGame.Singleton` (`WorldManager`, buses, `Assets`), same as in a spec's `Apply`.
+
+reuse `NeoActionTarget` for your own self/other params so the editor shows the same dropdown as the built-ins.
+
+### how triggers fire them
+
+`TriggerSpec` adds a `NeoTrigger`, which runs `onEnter` once when something enters, `onStay` every frame it stays, `onExit` once when it leaves. all of this happens inside the collision pass, after the worlds tick, so loading worlds and destroying objects from an action is safe.
+
+the stuff that fucked me (all of it checked by actually running a trigger):
+
+- **no `tag` = fires on EVERY collider**: walls, merged collider groups, other triggers, everything. two untagged triggers that overlap fire on each other. set a `tag` unless you really mean anything
+- **it's per collider, not per object**: an object with two colliders inside the trigger enters twice
+- **the tag is only checked on enter**: an object that gets the tag while it's already inside doesn't fire anything until it leaves and comes back in
+- **an action that destroys the trigger's own object stops the list**: the actions after it don't run
+- **an action that throws crashes the game**: the exception goes straight out of the collision pass, nothing catches it. if an action can fail, handle it inside `Invoke`
+- **one action instance per trigger, reused on every fire**: the map deserializes the action once when it builds, and the same instance runs every time. a field you change in `Invoke` is still changed next time. keep actions stateless and put state on a component
+
+### rules that differ from specs
+
+- there's no `id`, and map object `overrides` can't reach into a single action: override the whole list property (`"onEnter": [ ... ]`) like the 0.4.0 Maps example in `instructions.md` does
+- name clashes are per kind: a spec and an action can share a name, two actions can't
+
+---
+
 ## Checklist for a new spec
 
 1. `public sealed record XSpec(...) : INeoSpec` in the game project
@@ -227,3 +315,5 @@ texture tinting.
 3. `[NeoAsset(typeof(...))]` on content paths, `[NeoName("X")]` if files already use it
 4. `NeoColor` / `TileRect` / your own records instead of MonoGame `Color` / `Rectangle`
 5. build, then check `spec:XSpec` in the schema and open it in the editor
+
+same checklist for an action: `INeoAction` instead of `INeoSpec`, `Invoke` instead of `Apply`, and check `action:XAction` in the schema.
