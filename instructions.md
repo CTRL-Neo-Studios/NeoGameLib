@@ -500,6 +500,7 @@ the game viewport doesn't have to match the window anymore. set an aspect ratio 
 
 ```csharp
 ViewportAspect = 16f / 9f; // null (default) = fill the whole window
+SetViewportAspect(256, 232); // same thing from a width and height, e.g. an NES screen (0.4.4)
 LetterboxColor = Color.Black; // the bars
 ClearColor = Color.CornflowerBlue; // the viewport background, replaces the hardcoded clear
 Rectangle box = ViewportBounds; // window-pixel rectangle the game draws into
@@ -989,3 +990,21 @@ I rebuilt the Zelda HUD in my midterm project and wrote it the way I'd write a w
 - `Align = SpaceBetween` doesn't stretch on the cross axis anymore (it behaves like `Start`)
 
 old UI code: add `Anchor = new(0.5f), Pivot = new(0.5f)` where you relied on centering, and `Color = Color.White` where you relied on the white panel. the table at the top of [ui-instr.md](ui-instr.md) has the full before/after.
+
+also in 0.4.4:
+
+- `SetWindowSize(width, height)` and `SetViewportAspect(width, height)` on `NeoGame` (see 0.3.1 Window Sizing and 0.3.2 Letterbox viewport). setting `PreferredBackBufferWidth/Height` in `OnInitialize` never resized the window, which is why a "bigger window" kept coming out 800x480
+- `PixelPerfect` canvases dropped a whole scale step on some window sizes: 1280 / 256 came out as 4.9999995 from the log-space math and floored to 4 instead of 5. it snaps first now
+
+## [0.4.4] Set Window & Viewport aspect sizes
+
+`SetWindowSize(width, height)` resizes the window. call it from `OnInitialize` or any time later, applies changes on call
+
+```csharp
+protected override void OnInitialize()
+{
+    SetWindowSize(1280, 1280);
+}
+```
+
+don't set `GraphicsDeviceManager.PreferredBackBufferWidth/Height` from `OnInitialize` by hand because you need to manually call MonoGame's `ApplyChanges()` later and some of the resizing logic needs to recalculate. `SetWindowSize` does that for you -- in fullscreen it remembers the size and uses it when you go back to `Windowed`.

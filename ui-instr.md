@@ -392,7 +392,8 @@ float scale = hud.Scale; // viewport pixels per UI unit, updated every pass
 - `ConstantPixelSize` (default) uses `ScaleFactor`. `ScaleWithScreen` ignores `ScaleFactor` and uses `ReferenceResolution` + `Match`
 - that hud at 1920x1080 gets `Scale = 1.5` and a 1280x720 layout, so you design once at 1280x720
 - `Match` blends in log space like unity does, so 0.5 treats a 2x-wider viewport the same as a 2x-taller one. with `ViewportAspect` set to the reference ratio (e.g. 16:9 for 1280x720) the viewport always has that shape, so every `Match` value gives the same exact scale
-- a window resize, a window mode change or a new `ViewportAspect` gets picked up on the next update
+- a window resize (`SetWindowSize`, the user dragging the border, a window mode change) or a new `ViewportAspect`/`SetViewportAspect` gets picked up on the next update
+- `PixelPerfect` takes the largest whole number that fits: a 256x232 reference in a 1280x1160 viewport is scale 5, in 1279x1160 it's 4
 - `ScaleFactor` must be positive, `ReferenceResolution` positive, `Match` between 0 and 1, otherwise they throw
 
 each canvas draws in its own SpriteBatch pass scaled by `Scale`, so text, panels and images all scale with no per-element code.
