@@ -51,6 +51,12 @@ public class NeoGame : Game
     /// <summary>The color of the bars outside the viewport when ViewportAspect is set.</summary>
     public Color LetterboxColor { get; set; } = Color.Black;
 
+    /// <summary>
+    /// The sampler state of the world pass (sprites, OnDraw). Null keeps MonoGame's default (LinearClamp, smooths scaled pixel art). Use SamplerState.PointClamp for crisp pixel art under camera zoom.
+    /// </summary>
+    /// <remarks>UI canvases pick their own with PixelPerfect, OnDrawUI keeps the default.</remarks>
+    public SamplerState? WorldSamplerState { get; set; }
+
     /// <summary>The color the viewport is cleared to every frame.</summary>
     public Color ClearColor { get; set; } = Color.CornflowerBlue;
 
@@ -144,7 +150,7 @@ public class NeoGame : Game
                 NeoCamera camera = cameras[i];
                 if (!camera.IsAttached || !camera.Enabled) continue;
 
-                _spriteBatch.Begin(transformMatrix: camera.GetViewMatrix(GraphicsDevice.Viewport));
+                _spriteBatch.Begin(samplerState: WorldSamplerState, transformMatrix: camera.GetViewMatrix(GraphicsDevice.Viewport));
                 RenderBus.Draw(_spriteBatch, camera);
                 if (ReferenceEquals(camera, main)) OnDraw(_spriteBatch, gameTime);
                 _spriteBatch.End();
@@ -152,7 +158,7 @@ public class NeoGame : Game
         }
         else
         {
-            _spriteBatch.Begin();
+            _spriteBatch.Begin(samplerState: WorldSamplerState);
             RenderBus.Draw(_spriteBatch);
             OnDraw(_spriteBatch, gameTime);
             _spriteBatch.End();
