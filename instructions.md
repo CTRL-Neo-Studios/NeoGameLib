@@ -1008,3 +1008,22 @@ protected override void OnInitialize()
 ```
 
 don't set `GraphicsDeviceManager.PreferredBackBufferWidth/Height` from `OnInitialize` by hand because you need to manually call MonoGame's `ApplyChanges()` later and some of the resizing logic needs to recalculate. `SetWindowSize` does that for you -- in fullscreen it remembers the size and uses it when you go back to `Windowed`.
+
+## [0.4.5] Crisp pixel art in the world pass
+
+scaled sprites came out very fucking blurry.
+
+the world pass begins its batches w/ MonoGame's default `LinearClamp` sampler which blurs the pixel edges. only UI canvases could opt into point sampling (`PixelPerfect`).
+
+This is the same issue as the image compression of sprites in Unity where they have the "bilinear" "trilinear" compression method that makes image edges lose clarity.
+
+`NeoGame.WorldSamplerState` sets the sampler for the world pass (every camera batch, or the identity batch when there is no camera, so `OnDraw` as well). default is `null`, which is the old `LinearClamp`
+
+```csharp
+protected override void OnInitialize()
+{
+    WorldSamplerState = SamplerState.PointClamp;
+}
+```
+
+Note that this affects the world rendering, not the canvas rendering.
