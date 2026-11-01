@@ -1,15 +1,33 @@
 using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using NeoGameLib.NeoMapping;
 
 namespace NeoGameLib.NeoUI.Elements;
 
 public class NeoImage : NeoUIElement
 {
     private Rectangle? _sourceRectangle;
+    private Texture2D? _texture;
+    private string? _texturePath;
 
-    /// <summary>the borrowed texture</summary>
-    public Texture2D? Texture { get; set; }
+    /// <summary>
+    /// The borrowed texture. Resolves TexturePath on first read.
+    /// </summary>
+    /// <remarks>Assigning a texture in code clears TexturePath, since a live texture can't be written to a file.</remarks>
+    public Texture2D? Texture
+    {
+        get => _texture ??= NeoUIAssets.Load<Texture2D>(_texturePath);
+        set { _texture = value; _texturePath = null; }
+    }
+
+    /// <summary>Content path of the texture (e.g. "Sprites/gem"), loaded through NeoGame.Assets on first use. This is what UI files store.</summary>
+    [NeoAsset(typeof(Texture2D))]
+    public string? TexturePath
+    {
+        get => _texturePath;
+        set { _texturePath = value; _texture = null; }
+    }
     public Color Color { get; set; } = Color.White;
 
     public Rectangle? SourceRectangle

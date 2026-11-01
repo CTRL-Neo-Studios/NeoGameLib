@@ -288,6 +288,7 @@ public class NeoGame : Game
     protected override void UnloadContent()
     {
         _uiBus?.Dispose();
+        NeoBuiltinContent.Release();
         base.UnloadContent();
     }
 

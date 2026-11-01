@@ -7,10 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- maps and prefab libraries are data, not content pipeline assets: copy them next to the build output -->
+    <!-- maps, prefab libraries and UI documents are data, not content pipeline assets: copy them next to the build output -->
     <None Remove="Data/NeoMaps/**" />
     <None Remove="Data/NeoPrefabs/**" />
-    <Content Include="Data/NeoMaps/**;Data/NeoPrefabs/**" CopyToOutputDirectory="PreserveNewest" Pack="false" />
+    <None Remove="Data/NeoUI/**" />
+    <Content Include="Data/NeoMaps/**;Data/NeoPrefabs/**;Data/NeoUI/**" CopyToOutputDirectory="PreserveNewest" Pack="false" />
   </ItemGroup>
 
   <Target Name="NeoGenerateSchema" AfterTargets="Build"
@@ -19,6 +20,7 @@
       <_NeoSchemaTool>$(MSBuildThisFileDirectory)..\tools\neo-schema.dll</_NeoSchemaTool>
     </PropertyGroup>
     <Exec Command="dotnet &quot;$(_NeoSchemaTool)&quot; &quot;$(TargetPath)&quot; &quot;$(NeoProjectDir)&quot;" />
+    <!-- the schema tool writes Data/<Game>.neoui.xsd; the NeoUI folder is created by ExportProject, so documents are included in builds -->
   </Target>
 
 </Project>

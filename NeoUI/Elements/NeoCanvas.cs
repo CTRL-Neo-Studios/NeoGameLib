@@ -92,6 +92,17 @@ public class NeoCanvas : NeoUIElement
         (bus ?? Bus ?? NeoGame.Singleton?.UIBus)?.Remove(this, dedupe);
     }
 
+    /// <summary>
+    /// Runs scale + measure + placement for a viewport of the given window-pixel size without a bus
+    /// </summary>
+    public void Layout(Point viewportSize)
+    {
+        if (viewportSize.X <= 0 || viewportSize.Y <= 0) throw new ArgumentOutOfRangeException(nameof(viewportSize), "the viewport must be positive");
+
+        UpdateScale(new Rectangle(Point.Zero, viewportSize));
+        Visit(null, this, null, null, viewportSize, layoutOnly: true);
+    }
+
    internal void UpdateScale(Rectangle viewport)
     {
         ViewportOrigin = new Vector2(viewport.X, viewport.Y);

@@ -3,7 +3,7 @@
     <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     
     <PackageId>NeoGameLib</PackageId>
-    <Version>0.4.5</Version>
+    <Version>0.5.0</Version>
     <Authors>Type-32</Authors>
     <Company>CTRL Neo Studios</Company>
     <Description>NeoGameLib: prefab framework for monogame that packs a lot of punch, with not-so-simple collision bus, render bus, architectural stuff, UI stuff, etc.</Description>
@@ -38,6 +38,9 @@
     <None Include="README.md" Pack="true" PackagePath="\" />
     <None Remove="build/NeoGameLib.targets" />
     <None Include="build/NeoGameLib.targets" Pack="true" PackagePath="build/NeoGameLib.targets" />
+    <!-- the built-in UI font: the compiled xnb is embedded (see NeoBuiltinContent), its license travels with the package -->
+    <EmbeddedResource Include="Content/Builtin/Inter.xnb" LogicalName="NeoGameLib.Builtin.Inter.xnb" />
+    <None Include="Content/Builtin/Inter-LICENSE.txt" Pack="true" PackagePath="licenses/Inter-LICENSE.txt" />
   </ItemGroup>
 
   <!-- publishes & bundles the schema tool -->

@@ -6,21 +6,36 @@ note to future self: every code block in this file was compiled against the actu
 
 ---
 
+## [0.5.0] it behaves like Unity's uGUI now (BREAKING)
+
+0.4.4~5 tried to make the defaults like html/css. in 0.5.0 the layout model is uGUI's `RectTransform` instead.
+
+So now:
+- `Anchor` and `Pivot` default to **(0.5, 0.5)**. a new element is now centered in its parent like a new UI object in Unity.
+- an anchor is a **range**: `AnchorMin` and `AnchorMax`. when they're equal on an axis the element hangs from that point; when they differ the element **stretches** between them (see "Anchors: points and stretch")
+- `Anchor` still exists as a shorthand that sets both
+- **y points DOWN**, unlike Unity: anchor `(0, 0)` is the top-left, `(1, 1)` the bottom-right. "top" is 0 and "bottom" is 1
+- `Size` may be negative on a stretched axis, because there it's a delta on the anchor span, not a length
+- `Fill` outside a flexbox is **deprecated**: it works the same as a stretch anchor with zero insets. inside a flexbox `Fill` is the normal way to grow and is NOT deprecated
+- `NeoCanvas.Layout(viewportSize)` lays out a tree without a running game
+
+upgrading from 0.4.x: nothing moves for elements that only used `Anchor`/`Pivot`/`Position`/`Size`; they lay out exactly as before. anything that assumed the (0, 0) defaults from the 0.4.4 docs has to set `Anchor = Vector2.Zero, Pivot = Vector2.Zero` itself.
+
 ## [0.4.4] it behaves like html/css now
 
-if you know web dev, the defaults should already be what you expect
+(sizing and visibility parts still apply; the anchor/pivot default claim was wrong, see 0.5.0 above.)
 
 so this just works, no `Size`/`WidthMode`/`Color` needed:
 
 ```csharp
-NeoFlexBox row = new() { Align = NeoFlexAlign.Center, Gap = 2 }; // transparent, wraps its children, sits at the top-left
+NeoFlexBox row = new() { Align = NeoFlexAlign.Center, Gap = 2 }; // transparent, wraps its children
 row.Children.Add(new NeoImage { Texture = Content.Load<Texture2D>("Sprites/Inventory/gem") }); // as big as the texture
 row.Children.Add(new NeoLabel { Text = "X0", Font = font });
 ```
 
-to upgrade old UI code: put `Anchor = new(0.5f), Pivot = new(0.5f)` back on anything that relied on being centered, `Color = Color.White` on panels that relied on the white default, and `Enabled = false` on top of `Visible = false` is no longer needed.
+`Color = Color.White` on panels that relied on the old white default, and `Enabled = false` on top of `Visible = false` is no longer needed.
 
-(object initializers like `new NeoLabel { Text = "X0" }` vs setting properties after `new()` make no difference at all: an initializer IS "construct, then set each property". my HUD broke because of the old defaults above, not because of how I wrote it.)
+(object initializers like `new NeoLabel { Text = "X0" }` vs setting properties after `new()` make no difference at all: an initializer IS "construct, then set each property".)
 
 ---
 
@@ -90,26 +105,70 @@ it inherits the world `Transform`, so `Position`, `Rotation`, `Scale` and the Up
 
 | member | what it does |
 |---|---|
-| `Size` | the box size in UI units. with the default `Auto` mode an axis left at 0 sizes to the content instead. non-negative |
-| `Anchor` | the point on the PARENT's inner box this element hangs from, 0-1 per axis. default (0, 0) = top-left |
-| `Pivot` | the point on THIS box that sits on the anchor, 0-1 per axis. default (0, 0) = top-left |
-| `Position` | offset from the anchor, in UI units. with the defaults that's just "offset from the parent's top-left", like css `top`/`left` |
-| `WidthMode` / `HeightMode` | `Auto` (default), `Fixed`, `Fill` or `Fit`, see Sizing |
+| `Size` | on a point axis the box length (with the default `Auto` mode an axis left at 0 sizes to the content instead). on a stretched axis a delta added to the anchor span, so it can be negative |
+| `AnchorMin` / `AnchorMax` | the corners of the range on the PARENT's inner box that this element hangs from, 0-1 per axis. default (0.5, 0.5) for both = center |
+| `Anchor` | shorthand: sets both. reading gives `AnchorMin` |
+| `Pivot` | the point on THIS box that sits on the anchor, 0-1 per axis. default (0.5, 0.5) = center |
+| `Position` | offset from the anchor (on a stretched axis from the point on the anchor span that `Pivot` selects), in UI units |
+| `InsetLeft` / `InsetRight` / `InsetTop` / `InsetBottom` | the box edges as distances from the anchor edges, positive pointing inwards. another view of `Position` + `Size`: setting `InsetLeft = 16, InsetRight = 16` on a horizontally stretched element leaves it 16 from both sides |
+| `StretchesX` / `StretchesY` | true when the anchors differ on that axis. read-only |
+| `WidthMode` / `HeightMode` | `Auto` (default), `Fixed`, `Fill` (deprecated outside flexboxes) or `Fit`, see Sizing |
 | `Rotation` / `Scale` | visual only, see below |
-| `LayoutPosition` / `LayoutSize` | computed top-left and size from the last update/draw, in canvas units. read-only |
+| `LayoutPosition` / `LayoutSize` | computed top-left and size from the last update/draw/`Layout` call, in canvas units. read-only |
 | `DesiredSize` | what the element asked for during measuring. read-only |
 
-the placement formula:
+the placement formula, per axis (`parent` is the parent's inner box):
 
 ```
-top-left = parent inner top-left + parent inner size * Anchor + Position - own size * Pivot
+from   = parent.min + parent.length * AnchorMin
+to     = parent.min + parent.length * AnchorMax
+length = (AnchorMin == AnchorMax) ? desired length : max(0, to - from + Size)
+min    = lerp(from, to, Pivot) + Position - length * Pivot
 ```
 
-with the defaults (both 0) an element sits at the parent's top-left plus `Position`. to center something, set both to 0.5: a 200x100 panel on an 800x600 canvas lands at (300, 250). (1, 0) for both = top-right corner, (0.5, 1) = bottom-center, and so on.
+with the defaults a 200x100 panel on an 800x600 canvas lands at (300, 250). `Anchor = (1, 0), Pivot = (1, 0)` = top-right corner, `(0.5, 1)` for both = bottom-center, and so on.
 
 - "inner box" = the parent's box minus its `Padding` (panels and flexboxes only)
-- anchors and pivots outside 0-1 throw, and so do negative sizes
-- `NeoFlexBox` children and canvases ignore `Anchor`, `Pivot` and `Position`: the flexbox places its children itself, and a canvas always covers the whole viewport
+- anchors and pivots outside 0-1 throw. sizes may be negative (they only mean something on a stretched axis), the final box never is
+- `NeoFlexBox` children and canvases ignore `AnchorMin`/`AnchorMax`, `Pivot` and `Position`: the flexbox places its children itself, and a canvas always covers the whole viewport
+
+### Anchors: points and stretch
+
+anchoring to a side of the screen is just anchoring to the parent: a direct child of the canvas is anchored to the viewport (the letterbox bars are outside it). the usual presets, with y pointing down:
+
+| preset | `AnchorMin` | `AnchorMax` |
+|---|---|---|
+| top-left / top / top-right | (0, 0) / (0.5, 0) / (1, 0) | same as min |
+| left / center / right | (0, 0.5) / (0.5, 0.5) / (1, 0.5) | same as min |
+| bottom-left / bottom / bottom-right | (0, 1) / (0.5, 1) / (1, 1) | same as min |
+| stretch-top / stretch-middle / stretch-bottom | (0, y) | (1, y) with y = 0 / 0.5 / 1 |
+| stretch-left / stretch-center / stretch-right | (x, 0) | (x, 1) with x = 0 / 0.5 / 1 |
+| stretch | (0, 0) | (1, 1) |
+
+```csharp
+// an HP bar that is always 16 from both sides and 24 tall, 8 below the top
+NeoPanel bar = new()
+{
+    Color = Color.DarkRed,
+    ScreenTransform =
+    {
+        AnchorMin = new Vector2(0, 0), AnchorMax = new Vector2(1, 0), // stretched on x, a point on y
+        Pivot = new Vector2(0.5f, 0),
+        Position = new Vector2(0, 8), // 8 below the top edge
+        Size = new Vector2(-32, 24), // 32 less than the span on x (16 per side), 24 tall on y
+    }
+};
+
+// the same horizontal box through the insets, on a left-pivoted element
+NeoPanel bar2 = new()
+{
+    ScreenTransform = { AnchorMin = new Vector2(0, 0), AnchorMax = new Vector2(1, 0), Pivot = new Vector2(0, 0), InsetLeft = 16, InsetRight = 16 }
+};
+```
+
+- on a stretched axis `Size` is a delta: `Size.X = -32` means "32 less than the anchor span", so 16 off each side. the `Inset*` properties are the readable way to set it
+- on a stretched axis the sizing mode is ignored: the anchors decide the length. an `Auto`/`Fit` parent still wraps a stretched child by its content size
+- a stretched axis never goes below 0 length, even with huge negative `Size`
 
 ### Rotation and Scale
 
@@ -128,7 +187,7 @@ every element picks its size per axis with `ScreenTransform.WidthMode` and `Scre
 
 - `Auto` (default): like css `width: auto`. use `Size` on that axis when it's set (above 0), otherwise wrap the content: the measured text for labels/buttons, the texture for images, or the smallest box that holds all visible children, plus `Padding`
 - `Fixed`: always use `Size`, even when it's 0
-- `Fill`: take the parent's full inner length. inside a `NeoFlexBox` it shares the leftover space on the main axis instead (see FlexBox)
+- `Fill`: **deprecated outside a flexbox**, use stretch anchors (`AnchorMin = (0,0)`, `AnchorMax = (1,1)`) instead. takes the parent's full inner length. inside a `NeoFlexBox` it shares the leftover space on the main axis instead (see FlexBox) and stays supported there
 - `Fit`: always wrap the content, ignoring `Size`
 
 so most of the time you don't touch the modes at all: leave `Size` alone to wrap, set it to pin the size, and it works per axis (`Size = new(100, 0)` = 100 wide, as tall as the content).
@@ -170,7 +229,7 @@ only `NeoPanel` and `NeoFlexBox` have `Padding`. labels, buttons and images don'
 
 ## FlexBox
 
-`NeoFlexBox` is a `NeoPanel` that orders its children in a row or a column. it controls the children's positions, so their `Anchor`/`Pivot`/`Position` do nothing.
+`NeoFlexBox` is a `NeoPanel` that orders its children in a row or a column. it controls the children's positions, so their `AnchorMin`/`AnchorMax`/`Pivot`/`Position` do nothing.
 
 ```csharp
 NeoFlexBox menu = new()
@@ -280,7 +339,8 @@ it's a flat rectangle: no border, no rounded corners, no texture, no 9-slice. fo
 
 | property | default | |
 |---|---|---|
-| `Font` | null | a `SpriteFont`. **no font = draws nothing and measures 0x0** |
+| `Font` | null | a `SpriteFont`. **no font = the built-in Inter font** (Regular, 16px, characters 32-126 and 160-255). assigning one in code clears `FontPath` |
+| `FontPath` | null | the content path of a font (`"fonts/ui"`), loaded through `NeoGame.Assets` the first time it's needed. this is what UI files store |
 | `Text` | `""` | |
 | `Color` | `Color.White` | |
 
@@ -300,11 +360,12 @@ panel.Children.Add(play);
 
 | property | default | |
 |---|---|---|
-| `Font`, `Text` | | same as `NeoLabel` |
+| `Font`, `FontPath`, `Text` | | same as `NeoLabel` |
 | `Color` | `Color.White` | the text color when idle |
 | `HoverColor` | `Color.LightGray` | text color while the mouse is over it |
 | `PressedColor` | `Color.Gray` | text color while hovered and the left button is held |
 | `OnClick` | null | fires when the left button is pressed AND released over the button |
+| `OnClickActions` | empty | `INeoAction`s that run in order after `OnClick`. this is what UI files store. the context has no `Self`/`Other` object, so `DestroyAction` and `SetEnabledAction` do nothing from here, and `SwitchWorldAction` needs an explicit `unload` list. `ctx.Element` is the button |
 | `Hovered` | | read-only, true while the mouse is over the drawn box |
 
 - it's text only: no background, no border. put it in a `NeoPanel` for that
@@ -316,7 +377,8 @@ panel.Children.Add(play);
 
 | property | default | |
 |---|---|---|
-| `Texture` | null | borrowed, never disposed by the UI |
+| `Texture` | null | borrowed, never disposed by the UI. assigning one in code clears `TexturePath` |
+| `TexturePath` | null | the content path of a texture (`"Sprites/gem"`), loaded through `NeoGame.Assets` the first time it's needed. this is what UI files store |
 | `SourceRectangle` | null | part of the texture to draw, null = whole texture. negative values throw |
 | `Color` | `Color.White` | tint |
 
@@ -423,6 +485,75 @@ stuff people (me) went looking for and didn't find. if you need one of these, it
 - text wrapping, text alignment inside a label, rich text
 - min/max sizes, aspect-ratio boxes
 - flex wrapping onto a second line, `rtl`/`btt` directions
-- panel borders, rounded corners, 9-slice, textured panels (use a `Fill` `NeoImage` child)
+- panel borders, rounded corners, 9-slice, textured panels (use a stretched `NeoImage` child)
 - button backgrounds (wrap it in a panel), keyboard/gamepad focus and navigation
 - text input fields, sliders, checkboxes, scroll views
+- characters outside the built-in font's ranges (CJK, emoji): give the label/button a `FontPath` that has them
+- custom elements in `.neoui.xml` files: only the built-in elements can be read and written
+
+---
+
+## [0.5.0] UI documents (`.neoui.xml`)
+
+a canvas can now FINALLY live in a file as in one canvas per file, so a UI can be built in the editor (or by hand) and loaded with one call:
+
+```csharp
+NeoCanvas menu = NeoUIDocument.Load("menus/pause"); // Data/NeoUI/menus/pause.neoui.xml, same naming rules as maps
+menu.Subscribe();
+menu.FindById<NeoLabel>("score").Text = "0"; // ids are how code reaches into a loaded tree
+
+string xml = NeoUIDocument.ToXml(menu); // the canonical form, see below
+NeoCanvas copy = NeoUIDocument.FromXml(xml); // from a string, e.g. in tools
+```
+
+```xml
+<Canvas xmlns="urn:neogamelib:ui:1" scaleMode="scaleWithScreen" referenceResolution="1280 720" match="0.5">
+  <Panel id="hud" anchor="stretch-top" pivot="0.5 0" left="16" right="16" y="8" height="40" color="#00000080" padding="8 4">
+    <Label id="hp" anchor="left" x="4" text="HP 100" fontPath="fonts/ui" />
+  </Panel>
+  <FlexBox id="menu" direction="column" gap="6" align="center">
+    <Button id="play" text="Play">
+      <Button.onClick>
+        <SwitchWorldAction world="level1">
+          <SwitchWorldAction.unload>
+            <item>menu</item>
+          </SwitchWorldAction.unload>
+        </SwitchWorldAction>
+      </Button.onClick>
+    </Button>
+  </FlexBox>
+</Canvas>
+```
+
+- the elements are `Canvas` (the root, once), `Panel`, `FlexBox`, `Label`, `Button` and `Image`, all in the namespace `urn:neogamelib:ui:1`. children are nested elements, in draw order
+- **attributes are the element's properties**, camelCase. anything that isn't at its default is written; leaving an attribute out means the default. unknown attributes, elements and enum values are errors that name the line and column
+- **layout attributes**, per axis, depend on whether that axis is stretched (the anchors differ on it):
+
+  | axis | point axis (anchors equal) | stretched axis (anchors differ) |
+  |---|---|---|
+  | horizontal | `x`, `width` | `left`, `right` |
+  | vertical | `y`, `height` | `top`, `bottom` |
+
+  writing the wrong form for an axis is a load error. `left`/`right`/`top`/`bottom` are the `Inset*` properties
+- `anchor` takes a preset (`top-left`, `top`, `top-right`, `left`, `center`, `right`, `bottom-left`, `bottom`, `bottom-right`, `stretch-top`, `stretch-middle`, `stretch-bottom`, `stretch-left`, `stretch-center`, `stretch-right`, `stretch`), a point `"x y"`, or a range `"minX minY maxX maxY"`. or write `anchorMin` / `anchorMax` separately, but not together with `anchor`
+- values: vectors `"x y"` (one number = both), colors `#RRGGBB` or `#RRGGBBAA` (raw RGBA as MonoGame's `Color` stores it, which is premultiplied, unlike `SpriteSpec.color`), padding `"all"` / `"horizontal vertical"` / `"left top right bottom"`, rectangles `"x y width height"`, enums in camelCase. numbers always use `.` as the decimal separator, whatever the machine's language is
+- `rotation` is in **degrees** in files (clockwise, since y points down), like Unity's inspector. `ScreenTransform.Rotation` in code stays radians; the loader and writer convert, and the writer rounds to 4 decimals so `15` stays `15`
+- assets are paths (`fontPath`, `texturePath`), resolved through `NeoGame.Assets` when first used. a path that isn't in your content project throws then, with the path in the message
+- click actions go in a `<Button.onClick>` element, each action as an element named by its registry name. an action's plain values are attributes; lists and nested records are property elements named `Action.property`, with `<item>` entries. they are built by the same code as the actions in map files, so defaults and required parameters behave the same
+- the root has to be `<Canvas>`, and it takes no layout attributes (`anchor`, `x`, `rotation`, ...): a canvas always covers the viewport, so those are load errors. scale it with `scaleMode`/`scaleFactor`/`referenceResolution`
+- custom `NeoUIElement` subclasses aren't supported, and that includes subclasses of the built-ins (a `MyPanel : NeoPanel` would lose its extra state as a `<Panel>`): writing one throws, reading an unknown element is an error
+
+### schema and checking in your IDE
+
+every build of a game that references NeoGameLib writes two things next to `neo.project.json`:
+
+- `Data/<Game>.neoui.xsd`: an XML schema for the documents. it includes **your game's own actions**, so the IDE completes and checks them too. point a document at it with `xsi:schemaLocation="urn:neogamelib:ui:1 <Game>.neoui.xsd"` (relative to the file; the path depends on how deep the file is in `Data/NeoUI/`), or associate `*.neoui.xml` with it in your IDE (Rider: Settings > Languages & Frameworks > Schemas and DTDs; VS Code with the Red Hat XML extension: `xml.fileAssociations`)
+- an `x-neo-ui` section in `Data/<Game>.neoschema.json` for the editor: every element's attributes with types, defaults (read from the code, so they can't drift) and `x-neo-asset` markers, the layout attributes, and the anchor presets
+
+what the XSD can't check, the loader does: that `width` isn't mixed with `left`/`right` (it depends on the anchors' values), that an anchor stays between 0 and 1, and the values inside an action's properties.
+
+### for tools: layout without a game
+
+`NeoCanvas.Layout(viewportSize)` computes every element's `ScreenTransform.LayoutPosition` / `LayoutSize` (in canvas units) for a viewport size in window pixels, with no `NeoGame`, bus or `SpriteBatch`. text needs a font to measure; without a running game the built-in font isn't loaded, so give labels and buttons a `Font` yourself. `MeasureString` only reads glyph metrics, so a `SpriteFont` built with a null texture measures exactly like the real one (`checks/NeoGameLib.Checks/BuiltinFont.cs` reads Inter's metrics out of the embedded xnb that way).
+
+`fixtures/ui-layout/*.json` holds documents with their expected rectangles at five viewport sizes, generated by `dotnet run --project checks/NeoGameLib.Checks -- --update-fixtures`; the `text` case measures with the built-in Inter. the editor's layout code has to reproduce them. a plain run of the checks fails when a committed fixture no longer matches the library, so a layout change always shows up as a reviewed diff. `x-neo-ui.builtinFont.sha256` is the hash of the embedded Inter.xnb, so a tool that ships its own copy can tell when it's stale.

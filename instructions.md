@@ -1027,3 +1027,33 @@ protected override void OnInitialize()
 ```
 
 Note that this affects the world rendering, not the canvas rendering.
+
+---
+
+# 0.5.0 - uGUI-style UI layout, UI documents
+
+the UI editor needed a layout model that matches something people already know, so the UI follows Unity's uGUI `RectTransform`. details and the formula are in [ui-instr.md](ui-instr.md).
+
+## [0.5.0] Anchors are ranges (BREAKING)
+
+- `ScreenTransform.Anchor` is now the shorthand for `AnchorMin` + `AnchorMax`. when they differ on an axis the element stretches between them, like uGUI's stretch presets
+- `Size` is a delta on stretched axes and may be negative there. `InsetLeft`/`InsetRight`/`InsetTop`/`InsetBottom` read and write the same data as distances from the anchor edges (they aren't named `Left`/`Right` because `Transform.Left`/`Right` are direction vectors)
+- the defaults stay `(0.5, 0.5)` for anchors and pivot. the 0.4.4 docs claimed `(0, 0)`, which the code never did; the docs are fixed instead of the code
+- y points down, so anchor `(0, 0)` is the top-left, not the bottom-left like in Unity
+- `NeoUISizing.Fill` outside a flexbox is deprecated in favor of stretch anchors but still works. inside a flexbox it's the normal grow mode
+- `NeoCanvas.Layout(viewportSize)` runs scale + measure + placement without a game, a bus or `OnUpdate`
+- point-anchored layouts lay out exactly as in 0.4.x
+
+## [0.5.0] UI documents
+
+a canvas can be loaded from and written to `Data/NeoUI/<name>.neoui.xml`, one canvas per file: `NeoUIDocument.Load/FromXml/ToXml`. why XML: the nesting reads like the UI tree and attributes keep each element on one line, like UXML. maps and prefabs stay JSON, grids and dictionaries suit it better. the format, value grammar and error rules are in [ui-instr.md](ui-instr.md) "UI documents".
+
+- elements got `Id` and `FindById<T>(id)`, since a loaded tree has to be reachable from code
+- `NeoLabel`/`NeoButton` got `FontPath`, `NeoImage` got `TexturePath` (marked `[NeoAsset]`). a path loads lazily through `NeoGame.Assets`; assigning the live `Font`/`Texture` clears the path
+- **no font = the built-in Inter font**, instead of drawing nothing. Inter Regular 16px, characters 32-126 and 160-255, is built from `Content/Builtin/Inter.spritefont` (`Content/Builtin/build.sh` rebuilds the xnb with the pinned mgcb), embedded into `NeoGameLib.dll` and read by `NeoBuiltinContent`, a `ContentManager` over the embedded resource. DesktopGL only, which is the only backend the package references. Inter is under the SIL OFL 1.1; its license ships in the package under `licenses/`
+- `NeoButton.OnClickActions` runs `INeoAction`s on click. `NeoActionContext` got an optional third field `Element` (the clicked button), so existing `new NeoActionContext(self, other)` calls compile unchanged. from UI there is no `Self`/`Other`, so `DestroyAction`/`SetEnabledAction` do nothing and `SwitchWorldAction` needs an explicit `unload`
+- the schema tool also writes `Data/<Game>.neoui.xsd` (for IDE completion and checking, includes the game's own actions) and an `x-neo-ui` section in `neoschema.json` (for the editor). both are generated from the same table the loader reads, defaults included, so they can't disagree with the code. `Data/NeoUI/**` is copied to the build output like maps
+- `fixtures/ui-layout/*.json`: documents with expected rectangles at five viewport sizes, for the editor's layout port to reproduce. the `text` case measures with the built-in Inter, and `x-neo-ui.builtinFont.sha256` lets the editor check its copy of the font is this one
+- an anchor or pivot outside 0-1 in a file is a load error at its line and column, like every other bad value (it used to escape as a bare `ArgumentOutOfRangeException`)
+
+checks for all of this live in `checks/NeoGameLib.Checks` (`dotnet run --project checks/NeoGameLib.Checks`).

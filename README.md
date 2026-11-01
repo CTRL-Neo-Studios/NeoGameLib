@@ -46,7 +46,7 @@ same as MonoGame / screen space: y points DOWN.
 
 ## Schema tool
 
-every `dotnet build` of a game that references NeoGameLib runs the schema tool automatically and creates/updates `Data/neo.project.json` and `Data/<Game>.neoschema.json` which the map editor reads
+every `dotnet build` of a game that references NeoGameLib runs the schema tool automatically and creates/updates `Data/neo.project.json`, `Data/<Game>.neoschema.json` (which the map editor reads) and `Data/<Game>.neoui.xsd` (an XML schema for `Data/NeoUI/*.neoui.xml` UI documents, for IDE completion and checking)
 
 you can run it manually (e.g. after turning it off) via:
 

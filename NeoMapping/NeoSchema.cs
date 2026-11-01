@@ -11,6 +11,7 @@ using NeoGameLib.NeoMapping.DurableActions;
 using NeoGameLib.NeoMapping.DurableMap;
 using NeoGameLib.NeoMapping.DurablePrefabs;
 using NeoGameLib.NeoMapping.DurableSpecifications;
+using NeoGameLib.NeoUI;
 
 namespace NeoGameLib.NeoMapping;
 
@@ -40,6 +41,7 @@ public static class NeoSchema
         string dataDir = Path.Combine(projectDir, NeoProject.DataFolder);
         Directory.CreateDirectory(Path.Combine(dataDir, NeoProject.MapsFolder));
         Directory.CreateDirectory(Path.Combine(dataDir, NeoProject.PrefabsFolder));
+        Directory.CreateDirectory(Path.Combine(dataDir, NeoProject.UIFolder));
 
         string projectPath = Path.Combine(dataDir, NeoProject.FileName);
         NeoProject project;
@@ -60,7 +62,12 @@ public static class NeoSchema
         // write only on change so editors watching the file don't reload on every tool build
         if (!File.Exists(schemaPath) || File.ReadAllText(schemaPath) != content) File.WriteAllText(schemaPath, content);
 
-        return $"{NeoRegistry.Specs.Count} specs, {NeoRegistry.Actions.Count} actions -> {schemaPath}";
+        // the XSD for IDEs lists this game's actions too, so it's per game as well. the file names follow the schema's: <Game>.neoschema.json -> <Game>.neoui.xsd
+        string xsdPath = Path.Combine(dataDir, Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(project.Schema)) + ".neoui.xsd");
+        string xsd = NeoUISchema.BuildXsd();
+        if (!File.Exists(xsdPath) || File.ReadAllText(xsdPath) != xsd) File.WriteAllText(xsdPath, xsd);
+
+        return $"{NeoRegistry.Specs.Count} specs, {NeoRegistry.Actions.Count} actions -> {schemaPath}, {xsdPath}";
     }
 
     private sealed class Builder
@@ -90,6 +97,7 @@ public static class NeoSchema
                 ["x-neo-schema-version"] = Version,
                 ["x-neo-specs"] = new JsonArray(specNames.Select(n => (JsonNode) n).ToArray()),
                 ["x-neo-actions"] = new JsonArray(actionNames.Select(n => (JsonNode) n).ToArray()),
+                ["x-neo-ui"] = NeoUISchema.Build(),
                 ["x-neo-files"] = new JsonObject
                 {
                     ["neomap"] = TypeSchema(typeof(NeoMap)),

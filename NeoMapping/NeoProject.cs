@@ -15,6 +15,7 @@ public sealed class NeoProject
     public const string DataFolder = "Data";
     public const string MapsFolder = "NeoMaps";
     public const string PrefabsFolder = "NeoPrefabs";
+    public const string UIFolder = "NeoUI";
 
     public int Version { get; set; } = 1;
 

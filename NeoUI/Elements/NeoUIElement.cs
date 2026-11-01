@@ -18,6 +18,22 @@ public class NeoUIElement
         Children = new NeoUIChildren(this);
     }
 
+    /// <summary>
+    /// Optional name for finding this element from code after loading a UI file (see FindById). Not required to be unique since FindById returns the first match in tree order
+    /// </summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>Finds the first element in this subtree (this element included, depth first) with the given Id and type. Returns null when cant find a match</summary>
+    public T? FindById<T>(string id) where T : NeoUIElement
+    {
+        if (Id == id && this is T self) return self;
+
+        foreach (NeoUIElement child in Children)
+            if (child.FindById<T>(id) is { } found) return found;
+
+        return null;
+    }
+
     public NeoUIChildren Children { get; }
     public NeoUIElement? Parent { get; private set; }
 
@@ -49,21 +65,28 @@ public class NeoUIElement
             
             ScreenTransform t = child.ScreenTransform;
             fit = Vector2.Max(fit, new Vector2(
-                FitAxis(t.Anchor.X, t.Pivot.X, t.Position.X, t.DesiredSize.X),
-                FitAxis(t.Anchor.Y, t.Pivot.Y, t.Position.Y, t.DesiredSize.Y)
+                FitAxis(t.AnchorMin.X, t.AnchorMax.X, t.Pivot.X, t.Position.X, t.Size.X, t.DesiredSize.X),
+                FitAxis(t.AnchorMin.Y, t.AnchorMax.Y, t.Pivot.Y, t.Position.Y, t.Size.Y, t.DesiredSize.Y)
             ));
         }
         return fit;
     }
 
     // Gets smallest parent length that keeps the child inbetween 0 & length on one axis.
-    private static float FitAxis(float anchor, float pivot, float position, float size)
+    // a stretched child is (span * length + sizeDelta) long, and its desired length is its content, so the parent needs (content - delta) / span.
+    private static float FitAxis(float anchorMin, float anchorMax, float pivot, float position, float size, float desired)
     {
-        float need = 0;
-        if (anchor < 1) need = MathF.Max(need, (position + (1 - pivot) * size) / (1 - anchor));
-        if (anchor > 0) need = MathF.Max(need, (pivot * size - position) / anchor);
+        if (anchorMin != anchorMax) return MathF.Max(0, (desired - size) / (anchorMax - anchorMin));
+
+        float anchor = anchorMin, need = 0;
+        if (anchor < 1) need = MathF.Max(need, (position + (1 - pivot) * desired) / (1 - anchor));
+        if (anchor > 0) need = MathF.Max(need, (pivot * desired - position) / anchor);
         return need;
     }
+
+    // true when the parent places this element by anchors and the anchors differ on that axis (so Size is a delta, not a length). flexboxes and the canvas root ignore anchors.
+    private bool StretchedX => Parent is { PlacesChildrenByAnchor: true } && ScreenTransform.StretchesX;
+    private bool StretchedY => Parent is { PlacesChildrenByAnchor: true } && ScreenTransform.StretchesY;
 
     // Bottom-up: children is iterated first so that a parent with Fit sizing mode can account for their DesiredSize.
     // Fill measures into Size attr and is stretched on placement.
@@ -74,8 +97,8 @@ public class NeoUIElement
 
         Vector2 fit = Vector2.Max(MeasureContent(), MeasureChildren()) + ContentPadding.Total;
         ScreenTransform.DesiredSize = new Vector2(
-            DesiredAxis(ScreenTransform.WidthMode, ScreenTransform.Size.X, fit.X),
-            DesiredAxis(ScreenTransform.HeightMode, ScreenTransform.Size.Y, fit.Y)
+            StretchedX ? fit.X : DesiredAxis(ScreenTransform.WidthMode, ScreenTransform.Size.X, fit.X),
+            StretchedY ? fit.Y : DesiredAxis(ScreenTransform.HeightMode, ScreenTransform.Size.Y, fit.Y)
         );
     }
 
@@ -89,6 +112,9 @@ public class NeoUIElement
     };
 
     private protected virtual NeoPadding ContentPadding => default;
+
+    /// <summary>False for containers that position their children themselves (NeoFlexBox), which makes child anchors, Position and stretch do nothing.</summary>
+    private protected virtual bool PlacesChildrenByAnchor => true;
 
     /// <summary>Top-left of the padded box children are laid out in.</summary>
     private protected Vector2 InnerPosition => ScreenTransform.LayoutPosition + ContentPadding.TopLeft;
@@ -154,10 +180,11 @@ public class NeoUIElement
                Matrix.CreateTranslation(pivot);
     }
 
-    internal void Visit(NeoUIBus bus, NeoCanvas root, GameTime? gameTime, SpriteBatch? spriteBatch, Point viewportSize)
+    internal void Visit(NeoUIBus? bus, NeoCanvas root, GameTime? gameTime, SpriteBatch? spriteBatch, Point viewportSize, bool layoutOnly = false)
     {
         bool drawing = spriteBatch != null;
-        if (!Visible || (!drawing && !Enabled)) return;
+        bool ignoreEnabled = drawing || layoutOnly; // Enabled only gates updates; drawing and layout still see disabled elements
+        if (!Visible || (!ignoreEnabled && !Enabled)) return;
         if (_traversing) throw new InvalidOperationException("A UI subtree cannot be traversed recursively.");
 
         _traversing = true;
@@ -167,7 +194,7 @@ public class NeoUIElement
         Matrix restore = Matrix.Identity;
         try
         {
-            if (!CanVisit(bus, root, drawing)) return;
+            if (!CanVisit(bus, root, ignoreEnabled)) return;
             ScreenTransform t = ScreenTransform;
             if (ReferenceEquals(this, root))
             {
@@ -185,12 +212,11 @@ public class NeoUIElement
                 }
                 else
                 {
-                    Vector2 parentSize = Parent.InnerSize;
-                    t.LayoutSize = new Vector2(
-                        t.WidthMode == NeoUISizing.Fill ? parentSize.X : t.DesiredSize.X,
-                        t.HeightMode == NeoUISizing.Fill ? parentSize.Y : t.DesiredSize.Y
-                    );
-                    t.LayoutPosition = Parent.InnerPosition + parentSize * t.Anchor + t.Position - t.LayoutSize * t.Pivot;
+                    Vector2 parentSize = Parent.InnerSize, parentMin = Parent.InnerPosition;
+                    ScreenTransform.PlaceAxis(parentMin.X, parentSize.X, t.AnchorMin.X, t.AnchorMax.X, t.Pivot.X, t.Position.X, t.Size.X, t.DesiredSize.X, t.WidthMode == NeoUISizing.Fill, out float x, out float width);
+                    ScreenTransform.PlaceAxis(parentMin.Y, parentSize.Y, t.AnchorMin.Y, t.AnchorMax.Y, t.Pivot.Y, t.Position.Y, t.Size.Y, t.DesiredSize.Y, t.HeightMode == NeoUISizing.Fill, out float y, out float height);
+                    t.LayoutSize = new Vector2(width, height);
+                    t.LayoutPosition = new Vector2(x, y);
                 }
 
                 VisualMatrix = t.HasVisualTransform ? LocalVisualMatrix() * Parent.VisualMatrix : Parent.VisualMatrix;
@@ -206,11 +232,11 @@ public class NeoUIElement
             ArrangeChildren();
 
             if (drawing) OnDraw(spriteBatch);
-            else OnUpdate(gameTime);
+            else if (!layoutOnly) OnUpdate(gameTime);
 
-            while (CanVisit(bus, root, drawing) && Children.TryNext(out NeoUIElement child))
+            while (CanVisit(bus, root, ignoreEnabled) && Children.TryNext(out NeoUIElement child))
             {
-                child.Visit(bus, root, gameTime, spriteBatch, viewportSize);
+                child.Visit(bus, root, gameTime, spriteBatch, viewportSize, layoutOnly);
             }
         }
         finally
@@ -225,13 +251,13 @@ public class NeoUIElement
         }
     }
 
-    private bool CanVisit(NeoUIBus bus, NeoCanvas root, bool drawing)
+    private bool CanVisit(NeoUIBus? bus, NeoCanvas root, bool ignoreEnabled)
     {
-        if (!ReferenceEquals(root.Bus, bus)) return false;
+        if (bus is not null && !ReferenceEquals(root.Bus, bus)) return false;
         for (NeoUIElement element = this; element != null; element = element.Parent)
         {
             if (!element._traversing || element._attachmentVersion != element._traversalVersion ||
-                !element.Visible || (!drawing && !element.Enabled)) return false;
+                !element.Visible || (!ignoreEnabled && !element.Enabled)) return false;
             if (ReferenceEquals(element, root)) return true;
         }
         return false;

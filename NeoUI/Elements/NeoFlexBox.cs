@@ -26,6 +26,8 @@ public class NeoFlexBox : NeoPanel
     private bool FillsMain(NeoUIElement e) => (Row ? e.ScreenTransform.WidthMode : e.ScreenTransform.HeightMode) == NeoUISizing.Fill;
     private bool FillsCross(NeoUIElement e) => (Row ? e.ScreenTransform.HeightMode : e.ScreenTransform.WidthMode) == NeoUISizing.Fill;
 
+    private protected override bool PlacesChildrenByAnchor => false;
+
     private protected override Vector2 MeasureChildren()
     {
         float main = 0, cross = 0;
